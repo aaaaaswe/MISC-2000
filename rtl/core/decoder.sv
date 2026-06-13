@@ -1,25 +1,8 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// =============================================================================
-// MISC-2000 Instruction Decoder
-// =============================================================================
-// Decodes 11-bit opcodes into pipeline control signals.  Uses a priority-based
-// scheme to resolve overlaps between instruction classes (e.g., Float extends
-// into the Program Control range, and System has late entries in the SIMD
-// range).
+// MISC-2000 instruction decoder — 11-bit opcode -> class / addr-mode / dtype.
+// Priority-based: Integer Arithmetic wins over Logic in 0x400–0x407;
+// System late entries (0x7C0–0x7CF) win over SIMD.
 
 module misc_decoder (
     input  logic [10:0] opcode_i,
@@ -35,9 +18,7 @@ module misc_decoder (
     output logic        is_valid_o      // opcode maps to a defined instruction
 );
 
-    // =========================================================================
-    // Instruction class encodings
-    // =========================================================================
+    // Instruction class encodings (matches MISC-2000 opcode-class order)
     localparam logic [3:0] CLASS_DATA_XFER     = 4'd0;
     localparam logic [3:0] CLASS_INT_ARITH     = 4'd1;
     localparam logic [3:0] CLASS_LOGIC         = 4'd2;
