@@ -1,0 +1,40 @@
+# Simulator output
+sim/work/
+sim/*.vcd
+sim/*.vpd
+sim/*.fsdb
+sim/*.wlf
+sim/transcript*
+sim/modelsim.ini
+sim/vsim.wlf
+sim/*.log
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.elf
+*.bin
+*.hex
+*.map
+
+# Temporary files
+*~
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# Editor/IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
