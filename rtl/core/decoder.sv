@@ -30,6 +30,18 @@ module misc_decoder (
 
     // =========================================================================
     // Decoding
+    //
+    // NOTE on range ordering:
+    //   * System "late" entries (0x7C0..0x7CF) live inside the SIMD opcode
+    //     space (0x700..0x7FF) and must be matched BEFORE the generic SIMD
+    //     rule.
+    //   * Logic (0x408..0x4EF) is matched AFTER Integer Arithmetic so the
+    //     overlap 0x400..0x407 is unambiguously Integer Arithmetic.
+    //   * 11-bit opcodes can only reach 0x7FF; the privileged "System"
+    //     range 0x800..0x9FF described in the architecture document is
+    //     therefore unreachable from this decoder — it would require a
+    //     longer opcode word and is handled by a separate privileged
+    //     front-end.
     // =========================================================================
     always_comb begin
         // Default: invalid opcode
@@ -57,7 +69,7 @@ module misc_decoder (
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_DATA_XFER;
-            // Special single-opcode instructions always use IMM addressing
+            // Single-opcode special instructions always use IMM addressing.
             if (opcode_i == 11'h132 ||   // MOV.R2M
                 opcode_i == 11'h133 ||   // MOV.M2R
                 opcode_i == 11'h134 ||   // MOV.M2M
@@ -80,38 +92,41 @@ module misc_decoder (
             data_type_o   = ((opcode_i - 11'h200) % 20) / 5;
 
         // --------------------------------------------------------------------
-        // Logic — 0x400 .. 0x4EF
-        //   Same layout as Integer Arithmetic (20 opcodes / base)
+        // Logic — 0x408 .. 0x4EF
+        //   0x400..0x407 belongs to Integer Arithmetic (handled above), so
+        //   Logic starts at 0x408 to avoid double-mapping.  Same layout
+        //   (20 opcodes / base) otherwise.
         // --------------------------------------------------------------------
-        end else if (opcode_i >= 11'h400 && opcode_i <= 11'h4EF) begin
+        end else if (opcode_i >= 11'h408 && opcode_i <= 11'h4EF) begin
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_LOGIC;
-            addr_mode_o   = (opcode_i - 11'h400) % 5;
-            data_type_o   = ((opcode_i - 11'h400) % 20) / 5;
+            addr_mode_o   = (opcode_i - 11'h408) % 5;
+            data_type_o   = ((opcode_i - 11'h408) % 20) / 5;
 
         // --------------------------------------------------------------------
         // Float — 0x500 .. 0x62B
         //   4 float types: F16 / F32 / F64 / F128
-        //   Takes priority over Program Control in the 0x600–0x62B overlap
+        //   Takes priority over Program Control in the 0x600..0x62B overlap.
         // --------------------------------------------------------------------
         end else if (opcode_i >= 11'h500 && opcode_i <= 11'h62B) begin
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_FLOAT;
             addr_mode_o   = (opcode_i - 11'h500) % 5;
-            data_type_o   = ((opcode_i - 11'h500) % 20) / 5;
+            // Floating-point types: 4..7 map to F16/F32/F64/F128.
+            data_type_o   = 4 + ((opcode_i - 11'h500) % 20) / 5;
 
         // --------------------------------------------------------------------
         // Program Control — 0x62C .. 0x6FF
-        //   5 addressing modes per base instruction
-        //   Float occupies 0x600–0x62B, so Program Control starts at 0x62C
+        //   5 addressing modes per base instruction.
+        //   Float occupies 0x600..0x62B, so Program Control starts at 0x62C.
         // --------------------------------------------------------------------
         end else if (opcode_i >= 11'h62C && opcode_i <= 11'h6FF) begin
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_PROG_CTRL;
-            // BKPT (0x669), TRACE (0x66A), WATCHDOG (0x66B) override to IMM
+            // BKPT (0x669), TRACE (0x66A), WATCHDOG (0x66B) override to IMM.
             if (opcode_i == 11'h669 ||
                 opcode_i == 11'h66A ||
                 opcode_i == 11'h66B) begin
@@ -121,10 +136,18 @@ module misc_decoder (
             end
 
         // --------------------------------------------------------------------
+        // System (late) — 0x7C0 .. 0x7CF
+        //   These are System-class opcodes placed inside the SIMD range and
+        //   must be matched BEFORE the SIMD rule below.
+        // --------------------------------------------------------------------
+        end else if (opcode_i >= 11'h7C0 && opcode_i <= 11'h7CF) begin
+            is_standard_o = 1'b1;
+            is_valid_o    = 1'b1;
+            inst_class_o  = CLASS_SYSTEM;
+
+        // --------------------------------------------------------------------
         // SIMD Vector — 0x700 .. 0x7BF  &  0x7D0 .. 0x7FF
-        //   5 vector data types per instruction
-        //   System late entries (0x7C0–0x7CF) take priority (handled above by
-        //   the following block)
+        //   5 vector data types per instruction.
         // --------------------------------------------------------------------
         end else if ((opcode_i >= 11'h700 && opcode_i <= 11'h7BF) ||
                      (opcode_i >= 11'h7D0 && opcode_i <= 11'h7FF)) begin
@@ -134,22 +157,14 @@ module misc_decoder (
             data_type_o   = (opcode_i - 11'h700) % 5;
 
         // --------------------------------------------------------------------
-        // System (late) — 0x7C0 .. 0x7CF
-        //   These are System-class opcodes placed inside the SIMD range
+        // NOTE: System privileged range 0x800 .. 0x9FF
+        //   These opcodes cannot be encoded in an 11-bit word (max 0x7FF) and
+        //   are intentionally left unmapped here.  A separate privileged
+        //   decoder / longer opcode word is required to dispatch them.
         // --------------------------------------------------------------------
-        end else if (opcode_i >= 11'h7C0 && opcode_i <= 11'h7CF) begin
-            is_standard_o = 1'b1;
-            is_valid_o    = 1'b1;
-            inst_class_o  = CLASS_SYSTEM;
-
-        // --------------------------------------------------------------------
-        // System — 0x800 .. 0x9FF
-        //   Privileged / system-control instructions
-        //   Not in "standard zone" per the spec, so is_standard_o stays 0
-        // --------------------------------------------------------------------
-        end else if (opcode_i >= 11'h800 && opcode_i <= 11'h9FF) begin
-            is_valid_o   = 1'b1;
-            inst_class_o = CLASS_SYSTEM;
+        end else begin
+            // Anything else is treated as invalid (NOP).  Outputs retain the
+            // default (CLASS_DATA_XFER / zero) set at the top of the block.
         end
     end
 

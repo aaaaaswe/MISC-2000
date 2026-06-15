@@ -98,8 +98,16 @@ module misc_alu (
         endcase
     end
 
-    // Limit shift amount to the data width
-    assign shift_amt = op_b_i[5:0] & {6{1'b1}};  // raw shift amount (0..63)
+    // Limit shift amount to the data width (0 .. msb_pos).
+    // Values larger than msb_pos are wrapped to keep the result deterministic
+    // and to avoid undefined behaviour when a user-supplied shift amount
+    // exceeds the active data width.
+    logic [5:0] shift_wrap;
+    assign shift_wrap = (data_width_i == 3'd0) ? {3'd0, op_b_i[2:0]} :
+                        (data_width_i == 3'd1) ? {2'd0, op_b_i[3:0]} :
+                        (data_width_i == 3'd2) ? {1'd0, op_b_i[4:0]} :
+                                                 op_b_i[5:0];
+    assign shift_amt = shift_wrap;
 
     // -------------------------------------------------------------------------
     // Internal signals
@@ -312,10 +320,16 @@ module misc_alu (
             // ---- Compare & Test (flags only) ----
             OP_CMP: begin
                 raw_result = 64'd0;  // result is always 0 for CMP
+                // Re-use subtract carry/borrow for flag generation below.
+                raw_carry    = ~sub_ext[64];
+                raw_overflow = (op_a_i[msb_pos] != op_b_i[msb_pos]) &&
+                               (sub_ext[msb_pos] != op_a_i[msb_pos]);
             end
 
             OP_TEST: begin
                 raw_result = 64'd0;  // result is always 0 for TEST
+                // TEST does not produce a meaningful carry/overflow; flags
+                // are derived from the AND result (zero / negative only).
             end
 
             // ---- MIN / MAX (signed) ----

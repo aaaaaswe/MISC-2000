@@ -69,10 +69,10 @@ module misc_regfile #(
     logic [DATA_WIDTH-1:0] fwd_data;
 
     always_comb begin
-        unique case (rd_width_i)
-            3'd0:   fwd_data = {rf_rd_raw[63:8],  rd_data_i[7:0]};   // B
-            3'd1:   fwd_data = {rf_rd_raw[63:16], rd_data_i[15:0]};  // W
-            3'd2:   fwd_data = {rf_rd_raw[63:32], rd_data_i[31:0]};  // D
+        unique case (rd_width_i[1:0])
+            2'd0:   fwd_data = {rf_rd_raw[63:8],  rd_data_i[7:0]};   // B
+            2'd1:   fwd_data = {rf_rd_raw[63:16], rd_data_i[15:0]};  // W
+            2'd2:   fwd_data = {rf_rd_raw[63:32], rd_data_i[31:0]};  // D
             default: fwd_data = rd_data_i;                            // Q (64-bit)
         endcase
     end
@@ -97,12 +97,14 @@ module misc_regfile #(
                 regs[i] <= '0;
             end
         end else if (rd_wen_i && (rd_addr_i != '0)) begin
-            // Sub-word write — replace the appropriate byte lanes
-            case (rd_width_i)
-                3'd0: regs[rd_addr_i] <= {regs[rd_addr_i][63:8],  rd_data_i[7:0]};   // B
-                3'd1: regs[rd_addr_i] <= {regs[rd_addr_i][63:16], rd_data_i[15:0]};  // W
-                3'd2: regs[rd_addr_i] <= {regs[rd_addr_i][63:32], rd_data_i[31:0]};  // D
-                3'd3: regs[rd_addr_i] <= rd_data_i;                                   // Q
+            // Sub-word write — replace the appropriate byte lanes.
+            // Explicit 2-bit width selector so tools do not infer
+            // unreachable 4..7 case logic.
+            unique case (rd_width_i[1:0])
+                2'd0: regs[rd_addr_i] <= {regs[rd_addr_i][63:8],  rd_data_i[7:0]};   // B
+                2'd1: regs[rd_addr_i] <= {regs[rd_addr_i][63:16], rd_data_i[15:0]};  // W
+                2'd2: regs[rd_addr_i] <= {regs[rd_addr_i][63:32], rd_data_i[31:0]};  // D
+                2'd3: regs[rd_addr_i] <= rd_data_i;                                    // Q
             endcase
         end
     end
