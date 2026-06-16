@@ -199,9 +199,19 @@ module misc_pipeline_ctrl #(
 
     // -------------------------------------------------------------------------
     // Simplified opcode decode: extract register addresses and control signals.
-    // In a full implementation this would be driven by a dedicated decoder
-    // module (misc_decoder); here we derive the essentials from the opcode
-    // to keep the pipeline controller self-contained.
+    // Ranges match the misc_decoder module so the two interpretations of an
+    // opcode never disagree:
+    //   0x000..0x0FF   : vendor / NOP (ignored)
+    //   0x100..0x1FF   : data transfer (loads / stores)
+    //   0x200..0x407   : integer arithmetic
+    //   0x408..0x4EF   : logic   (note: 0x400..0x407 is int-arith, not logic)
+    //   0x500..0x62B   : float
+    //   0x62C..0x6FF   : program control (branches / jumps / traps)
+    //   0x700..0x7BF   : SIMD vector
+    //   0x7C0..0x7CF   : system (late, inside what looks like SIMD)
+    //   0x7D0..0x7FF   : SIMD vector (continued)
+    // 11-bit opcodes cannot reach 0x800+, so that "privileged" range is not
+    // decoded here.
     // -------------------------------------------------------------------------
     always_comb begin
         // Default: no operation
@@ -213,10 +223,8 @@ module misc_pipeline_ctrl #(
         decode_mem_read  = 1'b0;
         decode_mem_write = 1'b0;
 
-        // Determine instruction class from opcode ranges (matching misc_decoder layout)
         if (fd_opcode >= 11'h100 && fd_opcode <= 11'h1FF) begin
             // ---- Data Transfer ----
-            // Extract register addresses from opcode low bits
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
@@ -229,20 +237,16 @@ module misc_pipeline_ctrl #(
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
-            decode_alu_op    = fd_opcode[5:0];   // lower 6 bits select ALU operation
+            decode_alu_op    = fd_opcode[5:0];   // lower 6 bits select ALU op
             decode_reg_write = 1'b1;
-            decode_mem_read  = 1'b0;
-            decode_mem_write = 1'b0;
 
-        end else if (fd_opcode >= 11'h400 && fd_opcode <= 11'h4EF) begin
+        end else if (fd_opcode >= 11'h408 && fd_opcode <= 11'h4EF) begin
             // ---- Logic ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
             decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
-            decode_mem_read  = 1'b0;
-            decode_mem_write = 1'b0;
 
         end else if (fd_opcode >= 11'h500 && fd_opcode <= 11'h62B) begin
             // ---- Float ----
@@ -251,39 +255,31 @@ module misc_pipeline_ctrl #(
             decode_rd_addr   = fd_opcode[4:0];
             decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
-            decode_mem_read  = 1'b0;
-            decode_mem_write = 1'b0;
 
         end else if (fd_opcode >= 11'h62C && fd_opcode <= 11'h6FF) begin
             // ---- Program Control ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = 5'd0;
-            decode_reg_write = 1'b0;
-            decode_mem_read  = 1'b0;
-            decode_mem_write = 1'b0;
 
-        end else if (fd_opcode >= 11'h700 && fd_opcode <= 11'h7FF) begin
-            // ---- SIMD / System ----
+        end else if ((fd_opcode >= 11'h700 && fd_opcode <= 11'h7BF) ||
+                     (fd_opcode >= 11'h7D0 && fd_opcode <= 11'h7FF)) begin
+            // ---- SIMD Vector ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
             decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
-            decode_mem_read  = 1'b0;
-            decode_mem_write = 1'b0;
 
-        end else if (fd_opcode >= 11'h800 && fd_opcode <= 11'h9FF) begin
-            // ---- System (privileged) ----
+        end else if (fd_opcode >= 11'h7C0 && fd_opcode <= 11'h7CF) begin
+            // ---- System (late) ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
-            decode_reg_write = 1'b1;
-            decode_mem_read  = 1'b0;
-            decode_mem_write = 1'b0;
+            decode_reg_write = 1'b0;   // system ops do not write GPRs here
 
         end else begin
-            // Vendor zone (0x000–0x0FF) or invalid: treated as NOP
+            // ---- Vendor zone (0x000..0x0FF) or invalid -> NOP ----
             decode_rs1_addr  = 5'd0;
             decode_rs2_addr  = 5'd0;
             decode_rd_addr   = 5'd0;

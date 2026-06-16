@@ -6,27 +6,70 @@
 
 module misc_decoder (
     input  logic [10:0] opcode_i,
-    output logic [3:0]  inst_class_o,   // 0=DataXfer 1=IntArith 2=Logic
-                                        // 3=Float 4=ProgCtrl 5=SIMD
-                                        // 6=System 7=Vendor
-    output logic [2:0]  addr_mode_o,    // 0=IMM 1=REG 2=DIR 3=IDX 4=STK
-    output logic [2:0]  data_type_o,    // 0=B 1=W 2=D 3=Q
-                                        // 4=F16 5=F32 6=F64 7=F128
+    output logic [3:0]  inst_class_o,   // see CLASS_* below
+    output logic [2:0]  addr_mode_o,    // see ADDR_* below
+    output logic [2:0]  data_type_o,    // see DTYPE_* below
     output logic [7:0]  uop_code_o,     // micro-op code (vendor zone only)
     output logic        is_vendor_o,    // opcode in 0x000–0x0FF
     output logic        is_standard_o,  // opcode in 0x100–0x7CF
     output logic        is_valid_o      // opcode maps to a defined instruction
 );
 
-    // Instruction class encodings (matches MISC-2000 opcode-class order)
-    localparam logic [3:0] CLASS_DATA_XFER     = 4'd0;
-    localparam logic [3:0] CLASS_INT_ARITH     = 4'd1;
-    localparam logic [3:0] CLASS_LOGIC         = 4'd2;
-    localparam logic [3:0] CLASS_FLOAT         = 4'd3;
-    localparam logic [3:0] CLASS_PROG_CTRL     = 4'd4;
-    localparam logic [3:0] CLASS_SIMD          = 4'd5;
-    localparam logic [3:0] CLASS_SYSTEM        = 4'd6;
-    localparam logic [3:0] CLASS_VENDOR        = 4'd7;
+    // Instruction class encodings
+    localparam logic [3:0] CLASS_DATA_XFER = 4'd0;
+    localparam logic [3:0] CLASS_INT_ARITH = 4'd1;
+    localparam logic [3:0] CLASS_LOGIC     = 4'd2;
+    localparam logic [3:0] CLASS_FLOAT     = 4'd3;
+    localparam logic [3:0] CLASS_PROG_CTRL = 4'd4;
+    localparam logic [3:0] CLASS_SIMD      = 4'd5;
+    localparam logic [3:0] CLASS_SYSTEM    = 4'd6;
+    localparam logic [3:0] CLASS_VENDOR    = 4'd7;
+
+    // Addressing-mode encodings
+    localparam logic [2:0] ADDR_IMM = 3'd0;
+    localparam logic [2:0] ADDR_REG = 3'd1;
+    localparam logic [2:0] ADDR_DIR = 3'd2;
+    localparam logic [2:0] ADDR_IDX = 3'd3;
+    localparam logic [2:0] ADDR_STK = 3'd4;
+
+    // Integer data-type encodings (offset 0 of 20-opcode base)
+    localparam logic [2:0] DTYPE_B = 3'd0;
+    localparam logic [2:0] DTYPE_W = 3'd1;
+    localparam logic [2:0] DTYPE_D = 3'd2;
+    localparam logic [2:0] DTYPE_Q = 3'd3;
+
+    // Floating-point data-type encodings (offset 4 of 20-opcode base)
+    localparam logic [2:0] DTYPE_F16  = 3'd4;
+    localparam logic [2:0] DTYPE_F32  = 3'd5;
+    localparam logic [2:0] DTYPE_F64  = 3'd6;
+    localparam logic [2:0] DTYPE_F128 = 3'd7;
+
+    // Each "base" (opcode / 20) occupies 20 opcodes:
+    //   5 addressing modes × 4 data types  (integer classes)
+    //   5 addressing modes × 4 float types (float class)
+    localparam int OPS_PER_BASE = 20;
+    localparam int MODES_PER_BASE = 5;
+
+    // Helper: convert in-class offset -> addressing mode (0..4)
+    function automatic logic [2:0] offset_to_mode(logic [10:0] off);
+        logic [2:0] tmp;
+        tmp = 3'(off % MODES_PER_BASE);
+        return tmp;
+    endfunction
+
+    // Helper: integer class dtype (B/W/D/Q) from in-class offset
+    function automatic logic [2:0] offset_to_int_dtype(logic [10:0] off);
+        logic [2:0] tmp;
+        tmp = 3'((off % OPS_PER_BASE) / MODES_PER_BASE);
+        return tmp;
+    endfunction
+
+    // Helper: float class dtype (F16/F32/F64/F128) from in-class offset
+    function automatic logic [2:0] offset_to_float_dtype(logic [10:0] off);
+        logic [2:0] tmp;
+        tmp = 3'(4 + ((off % OPS_PER_BASE) / MODES_PER_BASE));
+        return tmp;
+    endfunction
 
     // =========================================================================
     // Decoding
@@ -44,10 +87,11 @@ module misc_decoder (
     //     front-end.
     // =========================================================================
     always_comb begin
-        // Default: invalid opcode
+        // Default: invalid opcode (NOP).  Outputs are assigned stable
+        // defaults so downstream logic never sees X on an un-matched path.
         inst_class_o  = CLASS_DATA_XFER;
-        addr_mode_o   = 3'd0;
-        data_type_o   = 3'd0;
+        addr_mode_o   = ADDR_IMM;
+        data_type_o   = DTYPE_Q;
         uop_code_o    = 8'd0;
         is_vendor_o   = 1'b0;
         is_standard_o = 1'b0;
@@ -55,6 +99,8 @@ module misc_decoder (
 
         // --------------------------------------------------------------------
         // Vendor Zone — 0x000 .. 0x0FF
+        //   Pass-through for customer-defined micro-ops.  uop_code is just
+        //   the low 8 bits of the opcode.
         // --------------------------------------------------------------------
         if (opcode_i <= 11'h0FF) begin
             is_vendor_o  = 1'b1;
@@ -66,18 +112,21 @@ module misc_decoder (
         // Data Transfer — 0x100 .. 0x1FF
         // --------------------------------------------------------------------
         end else if (opcode_i >= 11'h100 && opcode_i <= 11'h1FF) begin
+            logic [10:0] off;
+            off = opcode_i - 11'h100;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_DATA_XFER;
-            // Single-opcode special instructions always use IMM addressing.
+            data_type_o   = offset_to_int_dtype(off);
+            // Special single-opcode instructions always use IMM addressing.
             if (opcode_i == 11'h132 ||   // MOV.R2M
                 opcode_i == 11'h133 ||   // MOV.M2R
                 opcode_i == 11'h134 ||   // MOV.M2M
                 opcode_i == 11'h15D ||   // MEMBAR
                 opcode_i == 11'h15E) begin // FENCE
-                addr_mode_o = 3'd0;
+                addr_mode_o = ADDR_IMM;
             end else begin
-                addr_mode_o = (opcode_i - 11'h100) % 5;
+                addr_mode_o = offset_to_mode(off);
             end
 
         // --------------------------------------------------------------------
@@ -85,11 +134,13 @@ module misc_decoder (
         //   20 opcodes per base: (addr_mode × type) = 5 × 4
         // --------------------------------------------------------------------
         end else if (opcode_i >= 11'h200 && opcode_i <= 11'h407) begin
+            logic [10:0] off;
+            off = opcode_i - 11'h200;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_INT_ARITH;
-            addr_mode_o   = (opcode_i - 11'h200) % 5;
-            data_type_o   = ((opcode_i - 11'h200) % 20) / 5;
+            addr_mode_o   = offset_to_mode(off);
+            data_type_o   = offset_to_int_dtype(off);
 
         // --------------------------------------------------------------------
         // Logic — 0x408 .. 0x4EF
@@ -98,11 +149,13 @@ module misc_decoder (
         //   (20 opcodes / base) otherwise.
         // --------------------------------------------------------------------
         end else if (opcode_i >= 11'h408 && opcode_i <= 11'h4EF) begin
+            logic [10:0] off;
+            off = opcode_i - 11'h408;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_LOGIC;
-            addr_mode_o   = (opcode_i - 11'h408) % 5;
-            data_type_o   = ((opcode_i - 11'h408) % 20) / 5;
+            addr_mode_o   = offset_to_mode(off);
+            data_type_o   = offset_to_int_dtype(off);
 
         // --------------------------------------------------------------------
         // Float — 0x500 .. 0x62B
@@ -110,29 +163,33 @@ module misc_decoder (
         //   Takes priority over Program Control in the 0x600..0x62B overlap.
         // --------------------------------------------------------------------
         end else if (opcode_i >= 11'h500 && opcode_i <= 11'h62B) begin
+            logic [10:0] off;
+            off = opcode_i - 11'h500;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_FLOAT;
-            addr_mode_o   = (opcode_i - 11'h500) % 5;
-            // Floating-point types: 4..7 map to F16/F32/F64/F128.
-            data_type_o   = 4 + ((opcode_i - 11'h500) % 20) / 5;
+            addr_mode_o   = offset_to_mode(off);
+            data_type_o   = offset_to_float_dtype(off);
 
         // --------------------------------------------------------------------
         // Program Control — 0x62C .. 0x6FF
-        //   5 addressing modes per base instruction.
-        //   Float occupies 0x600..0x62B, so Program Control starts at 0x62C.
+        //   5 addressing modes per base instruction.  Note the float block
+        //   consumed 0x600..0x62B, so this block starts at 0x62C.  We still
+        //   subtract 0x600 to keep the mode index aligned with the spec.
         // --------------------------------------------------------------------
         end else if (opcode_i >= 11'h62C && opcode_i <= 11'h6FF) begin
+            logic [10:0] off;
+            off = opcode_i - 11'h600;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_PROG_CTRL;
-            // BKPT (0x669), TRACE (0x66A), WATCHDOG (0x66B) override to IMM.
+            // BKPT, TRACE, WATCHDOG are special and always use IMM.
             if (opcode_i == 11'h669 ||
                 opcode_i == 11'h66A ||
                 opcode_i == 11'h66B) begin
-                addr_mode_o = 3'd0;
+                addr_mode_o = ADDR_IMM;
             end else begin
-                addr_mode_o = (opcode_i - 11'h600) % 5;
+                addr_mode_o = offset_to_mode(off);
             end
 
         // --------------------------------------------------------------------
@@ -144,6 +201,7 @@ module misc_decoder (
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SYSTEM;
+            addr_mode_o   = ADDR_IMM;
 
         // --------------------------------------------------------------------
         // SIMD Vector — 0x700 .. 0x7BF  &  0x7D0 .. 0x7FF
@@ -154,18 +212,13 @@ module misc_decoder (
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SIMD;
+            addr_mode_o   = ADDR_REG;
             data_type_o   = (opcode_i - 11'h700) % 5;
-
-        // --------------------------------------------------------------------
-        // NOTE: System privileged range 0x800 .. 0x9FF
-        //   These opcodes cannot be encoded in an 11-bit word (max 0x7FF) and
-        //   are intentionally left unmapped here.  A separate privileged
-        //   decoder / longer opcode word is required to dispatch them.
-        // --------------------------------------------------------------------
-        end else begin
-            // Anything else is treated as invalid (NOP).  Outputs retain the
-            // default (CLASS_DATA_XFER / zero) set at the top of the block.
         end
+
+        // NOTE: 11-bit opcodes cannot express 0x800+.  There is no
+        // "privileged range" in this decoder — privileged instructions must
+        // be dispatched by a wider front-end (not this module).
     end
 
 endmodule

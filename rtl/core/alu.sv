@@ -72,10 +72,16 @@ module misc_alu (
     // Data width helpers
     // data_width_i:  0 ->  8-bit (B), 1 -> 16-bit (W),
     //                2 -> 32-bit (D), 3 -> 64-bit (Q)
+    //
+    // The ALU always operates on a 64-bit datapath, but when the active data
+    // width is narrower than 64 bits, the operands must be zero-extended into
+    // that width (sign-extended for the sign bit of signed ops).  Otherwise
+    // garbage in the upper bits (e.g. from an 8-bit load that left 56 bits
+    // untouched) leaks into MUL / DIV / MOD / shifts / bit-count results.
     // -------------------------------------------------------------------------
     logic [63:0] data_mask;        // bitmask for active data width
     logic [ 5:0] msb_pos;          // index of the MSB for the active data width
-    logic [ 5:0] shift_amt;        // limited shift amount (0..63)
+    logic [ 5:0] shift_amt;        // limited shift amount (0..msb_pos)
 
     always_comb begin
         case (data_width_i)
@@ -98,16 +104,36 @@ module misc_alu (
         endcase
     end
 
+    // Operands zero-masked to the active data width.  All ALU operations
+    // should use these (not op_a_i / op_b_i directly) unless they explicitly
+    // want to see the raw, un-truncated input (e.g. sign-extension ops).
+    logic [63:0] op_a_m;
+    logic [63:0] op_b_m;
+    assign op_a_m = op_a_i & data_mask;
+    assign op_b_m = op_b_i & data_mask;
+
     // Limit shift amount to the data width (0 .. msb_pos).
     // Values larger than msb_pos are wrapped to keep the result deterministic
     // and to avoid undefined behaviour when a user-supplied shift amount
     // exceeds the active data width.
-    logic [5:0] shift_wrap;
-    assign shift_wrap = (data_width_i == 3'd0) ? {3'd0, op_b_i[2:0]} :
-                        (data_width_i == 3'd1) ? {2'd0, op_b_i[3:0]} :
-                        (data_width_i == 3'd2) ? {1'd0, op_b_i[4:0]} :
-                                                 op_b_i[5:0];
-    assign shift_amt = shift_wrap;
+    always_comb begin
+        case (data_width_i)
+            3'd0:    shift_amt = {3'd0, op_b_i[2:0]};
+            3'd1:    shift_amt = {2'd0, op_b_i[3:0]};
+            3'd2:    shift_amt = {1'd0, op_b_i[4:0]};
+            default: shift_amt = op_b_i[5:0];
+        endcase
+    end
+
+    // Sign-extended operand for signed comparisons / arithmetic.  Note that
+    // the sign bit is the MSB of the *active* data width, not necessarily
+    // bit 63.  This is used for OP_SAR, OP_MIN, OP_MAX, OP_NEG, OP_ABS.
+    function automatic logic [63:0] sext_active(logic [63:0] val);
+        logic sign_bit;
+        sign_bit = val[msb_pos];
+        sext_active = val & data_mask;
+        sext_active[63:msb_pos] = {(64 - msb_pos){sign_bit}};
+    endfunction
 
     // -------------------------------------------------------------------------
     // Internal signals
@@ -117,92 +143,119 @@ module misc_alu (
     logic        raw_overflow;
     logic        raw_carry;
 
-    logic [127:0] mul_full;           // full 128-bit multiply product
+    logic [127:0] mul_full;           // full 128-bit multiply product (masked inputs)
     logic [ 63:0] div_quotient;       // division quotient
     logic [ 63:0] div_remainder;      // division remainder (modulo)
 
-    // Signed / unsigned extended operands for comparison / arithmetic flag computation
-    logic signed [63:0] op_a_signed;
-    logic signed [63:0] op_b_signed;
+    // Sign-extended operand for signed comparisons / arithmetic.  Operates
+    // on the masked (data-width-truncated) input so garbage above the MSB
+    // cannot corrupt the sign.
+    logic signed [63:0] op_a_sext;
+    logic signed [63:0] op_b_sext;
 
-    assign op_a_signed = $signed(op_a_i);
-    assign op_b_signed = $signed(op_b_i);
+    always_comb begin
+        op_a_sext = $signed(sext_active(op_a_i));
+        op_b_sext = $signed(sext_active(op_b_i));
+    end
 
-    // Extended add/sub for carry/borrow detection
+    // Extended add/sub for carry/borrow detection.  Uses the masked
+    // operands so the carry out is computed from the active-width slice.
     logic [64:0] add_ext;   // 65-bit add with carry
     logic [64:0] sub_ext;   // 65-bit sub with borrow
+
+    assign add_ext = {1'b0, op_a_m} + {1'b0, op_b_m};
+    assign sub_ext = {1'b0, op_a_m} - {1'b0, op_b_m};
 
     // -------------------------------------------------------------------------
     // Arithmetic helpers
     // -------------------------------------------------------------------------
-    // Full 128-bit multiply
-    assign mul_full = op_a_i * op_b_i;
+    // Full 128-bit multiply.  Only the masked inputs participate, so for
+    // narrower widths the upper half of the product is guaranteed to be
+    // zero when there is no overflow.
+    assign mul_full = op_a_m * op_b_m;
 
-    // Division by zero protection
-    assign div_quotient  = (op_b_i == 64'd0) ? 64'd0 : (op_a_i / op_b_i);
-    assign div_remainder = (op_b_i == 64'd0) ? 64'd0 : (op_a_i % op_b_i);
-
-    // 65-bit addition / subtraction for carry flag
-    assign add_ext = {1'b0, op_a_i} + {1'b0, op_b_i};
-    assign sub_ext = {1'b0, op_a_i} - {1'b0, op_b_i};
+    // Division by zero protection — produce 0 on both outputs to avoid
+    // propagating X from an undefined division.
+    assign div_quotient  = (op_b_m == 64'd0) ? 64'd0 : (op_a_m / op_b_m);
+    assign div_remainder = (op_b_m == 64'd0) ? 64'd0 : (op_a_m % op_b_m);
 
     // -------------------------------------------------------------------------
-    // CLZ / CTZ / POPCNT / BSWAP / BITREV macro functions
+    // CLZ / CTZ / POPCNT / BSWAP / BITREV helper functions
+    //   All helpers operate on the zero-masked input so bits above the
+    //   active data width cannot corrupt the result.
     // -------------------------------------------------------------------------
     function automatic logic [63:0] clz_func(input logic [63:0] val);
+        logic [63:0] v;
         integer i;
-        clz_func = 64'd0;
+        v = val & data_mask;
+        clz_func = 64'(msb_pos + 1);
         for (i = msb_pos; i >= 0; i--) begin
-            if (val[i]) begin
+            if (v[i]) begin
                 clz_func = 64'(msb_pos - i);
                 return;
             end
         end
-        clz_func = 64'(msb_pos + 1);
     endfunction
 
     function automatic logic [63:0] ctz_func(input logic [63:0] val);
+        logic [63:0] v;
         integer i;
-        ctz_func = 64'd0;
+        v = val & data_mask;
+        ctz_func = 64'(msb_pos + 1);
         for (i = 0; i <= msb_pos; i++) begin
-            if (val[i]) begin
+            if (v[i]) begin
                 ctz_func = 64'(i);
                 return;
             end
         end
-        ctz_func = 64'(msb_pos + 1);
     endfunction
 
     function automatic logic [63:0] popcnt_func(input logic [63:0] val);
+        logic [63:0] v;
         integer i;
+        v = val & data_mask;
         popcnt_func = 64'd0;
         for (i = 0; i <= msb_pos; i++) begin
-            if (val[i]) popcnt_func = popcnt_func + 64'd1;
+            if (v[i]) popcnt_func = popcnt_func + 64'd1;
         end
     endfunction
 
     function automatic logic [63:0] bswap_func(input logic [63:0] val);
+        logic [63:0] v;
         logic [63:0] swapped;
         integer i;
+        integer top_byte;
+        v = val & data_mask;
         swapped = 64'd0;
-        // Byte swap within the active data width: byte 0 <-> msb_byte, byte 1 <-> msb_byte-1, ...
-        for (i = 0; i < 8; i++) begin
-            if (i <= (msb_pos >> 3))
-                swapped[i*8 +: 8] = val[((msb_pos >> 3) - i) * 8 +: 8];
+        top_byte = msb_pos >> 3;
+        // Byte-swap within the active data width: 0 <-> top_byte, etc.
+        for (i = 0; i <= top_byte; i++) begin
+            swapped[i*8 +: 8] = v[(top_byte - i) * 8 +: 8];
         end
         return swapped;
     endfunction
 
     function automatic logic [63:0] bitrev_func(input logic [63:0] val);
+        logic [63:0] v;
         integer i;
+        v = val & data_mask;
         bitrev_func = 64'd0;
         for (i = 0; i <= msb_pos; i++) begin
-            bitrev_func[msb_pos - i] = val[i];
+            bitrev_func[msb_pos - i] = v[i];
         end
     endfunction
 
     // -------------------------------------------------------------------------
     // Main ALU operation
+    //   Rules:
+    //   * Operands participating in arithmetic/logic/shift are op_a_m / op_b_m
+    //     (zero-masked to the active data width) unless otherwise noted.
+    //   * Signed operations use op_a_sext / op_b_sext (sign-extended from the
+    //     active data width into bit 63) so narrower-width signed values are
+    //     interpreted correctly.
+    //   * raw_result is always truncated to the active data width at the
+    //     output (masked_result), so it is fine if computation temporarily
+    //     produces non-zero bits above msb_pos.
     // -------------------------------------------------------------------------
     always_comb begin
         raw_result   = 64'd0;
@@ -214,22 +267,22 @@ module misc_alu (
             OP_ADD: begin
                 raw_result   = add_ext[63:0];
                 raw_carry    = add_ext[64];
-                // Signed overflow: same sign operands, result sign differs
-                raw_overflow = (op_a_i[msb_pos] == op_b_i[msb_pos]) &&
-                               (raw_result[msb_pos] != op_a_i[msb_pos]);
+                // Signed overflow: same-sign operands produce opposite-sign result.
+                raw_overflow = (op_a_m[msb_pos] == op_b_m[msb_pos]) &&
+                               (raw_result[msb_pos] != op_a_m[msb_pos]);
             end
 
             OP_SUB: begin
                 raw_result   = sub_ext[63:0];
                 raw_carry    = ~sub_ext[64];  // borrow flag (inverted carry)
-                // Signed overflow: opposite sign operands, result sign differs from op_a
-                raw_overflow = (op_a_i[msb_pos] != op_b_i[msb_pos]) &&
-                               (raw_result[msb_pos] != op_a_i[msb_pos]);
+                // Signed overflow: opposite-sign operands produce op_a's sign.
+                raw_overflow = (op_a_m[msb_pos] != op_b_m[msb_pos]) &&
+                               (raw_result[msb_pos] != op_a_m[msb_pos]);
             end
 
             OP_MUL: begin
                 raw_result = mul_full[63:0];
-                // Overflow: upper 64 bits of 128-bit product are non-zero
+                // Overflow: upper 64 bits of 128-bit product are non-zero.
                 raw_overflow = |mul_full[127:64];
             end
 
@@ -243,111 +296,113 @@ module misc_alu (
 
             // ---- Logical ----
             OP_AND: begin
-                raw_result = op_a_i & op_b_i;
+                raw_result = op_a_m & op_b_m;
             end
 
             OP_OR: begin
-                raw_result = op_a_i | op_b_i;
+                raw_result = op_a_m | op_b_m;
             end
 
             OP_XOR: begin
-                raw_result = op_a_i ^ op_b_i;
+                raw_result = op_a_m ^ op_b_m;
             end
 
             OP_NOT: begin
-                raw_result = ~op_a_i;
+                raw_result = ~op_a_m;
             end
 
             // ---- Shifts & Rotates ----
             OP_SHL: begin
-                raw_result = op_a_i << shift_amt;
+                raw_result = op_a_m << shift_amt;
             end
 
             OP_SHR: begin
-                raw_result = op_a_i >> shift_amt;
+                raw_result = op_a_m >> shift_amt;
             end
 
             OP_SAR: begin
-                // Use signed shift within the data width
-                case (data_width_i)
-                    3'd0: raw_result = {{56{op_a_i[7]}},  op_a_i[7:0]}  >> shift_amt;
-                    3'd1: raw_result = {{48{op_a_i[15]}}, op_a_i[15:0]} >> shift_amt;
-                    3'd2: raw_result = {{32{op_a_i[31]}}, op_a_i[31:0]} >> shift_amt;
-                    default: raw_result = $signed(op_a_i) >>> shift_amt;
-                endcase
+                // Arithmetic right shift on the sign-extended value.
+                // Using `>>>` on a signed operand replicates the sign bit.
+                raw_result = op_a_sext >>> shift_amt;
             end
 
             OP_ROL: begin
-                logic [5:0] rot_amt;
-                rot_amt = shift_amt % (msb_pos + 6'd1);
-                raw_result = (op_a_i << rot_amt) | (op_a_i >> ((msb_pos + 6'd1) - rot_amt));
+                logic [6:0] rot_amt;
+                rot_amt = shift_amt % (7'(msb_pos) + 7'd1);
+                raw_result = (op_a_m << rot_amt) | (op_a_m >> ((7'(msb_pos) + 7'd1) - rot_amt));
             end
 
             OP_ROR: begin
-                logic [5:0] rot_amt;
-                rot_amt = shift_amt % (msb_pos + 6'd1);
-                raw_result = (op_a_i >> rot_amt) | (op_a_i << ((msb_pos + 6'd1) - rot_amt));
+                logic [6:0] rot_amt;
+                rot_amt = shift_amt % (7'(msb_pos) + 7'd1);
+                raw_result = (op_a_m >> rot_amt) | (op_a_m << ((7'(msb_pos) + 7'd1) - rot_amt));
             end
 
             // ---- Unary Arithmetic ----
             OP_INC: begin
-                raw_result   = op_a_i + 64'd1;
-                raw_carry    = (op_a_i == data_mask);   // carry out when wrapping
-                raw_overflow = (op_a_i[msb_pos] == 1'b0) && (raw_result[msb_pos] == 1'b1);
+                raw_result   = op_a_m + 64'd1;
+                raw_carry    = (op_a_m == data_mask);   // carry out when wrapping
+                raw_overflow = (op_a_m[msb_pos] == 1'b0) && (raw_result[msb_pos] == 1'b1);
             end
 
             OP_DEC: begin
-                raw_result   = op_a_i - 64'd1;
-                raw_carry    = (op_a_i == 64'd0);       // borrow when wrapping from 0
-                raw_overflow = (op_a_i[msb_pos] == 1'b1) && (raw_result[msb_pos] == 1'b0);
+                raw_result   = op_a_m - 64'd1;
+                raw_carry    = (op_a_m == 64'd0);       // borrow when wrapping from 0
+                raw_overflow = (op_a_m[msb_pos] == 1'b1) && (raw_result[msb_pos] == 1'b0);
             end
 
             OP_NEG: begin
-                raw_result   = -op_a_signed;
-                // Overflow: negating the most negative signed value
-                raw_overflow = (op_a_i[msb_pos] == 1'b1) && (raw_result[msb_pos] == 1'b1);
+                // Negate the sign-extended value so a 0x80 input at width=8
+                // correctly overflows to -128 instead of being "computed"
+                // from the raw 64-bit -0x80.
+                raw_result   = 64'(-op_a_sext);
+                // Overflow: negating the most negative signed value.
+                raw_overflow = (op_a_m[msb_pos] == 1'b1) && (raw_result[msb_pos] == 1'b1);
             end
 
             OP_ABS: begin
-                if (op_a_signed < 0)
-                    raw_result = -op_a_signed;
+                if (op_a_sext < 0)
+                    raw_result = 64'(-op_a_sext);
                 else
-                    raw_result = op_a_i;
-                // Overflow: ABS of most negative value
-                raw_overflow = (op_a_signed < 0) && (raw_result[msb_pos] == 1'b1);
+                    raw_result = op_a_m;
+                // Overflow: ABS of the most negative value.
+                raw_overflow = (op_a_sext < 0) && (raw_result[msb_pos] == 1'b1);
             end
 
             // ---- Compare & Test (flags only) ----
+            //   raw_result is forced to 0 at the output for CMP/TEST so that
+            //   consumers see "no result written back".  Flags are still
+            //   computed from the real operands below.
             OP_CMP: begin
-                raw_result = 64'd0;  // result is always 0 for CMP
-                // Re-use subtract carry/borrow for flag generation below.
+                raw_result = 64'd0;
+                // Re-use subtract carry/borrow for flag generation.
                 raw_carry    = ~sub_ext[64];
-                raw_overflow = (op_a_i[msb_pos] != op_b_i[msb_pos]) &&
-                               (sub_ext[msb_pos] != op_a_i[msb_pos]);
+                raw_overflow = (op_a_m[msb_pos] != op_b_m[msb_pos]) &&
+                               (sub_ext[msb_pos] != op_a_m[msb_pos]);
             end
 
             OP_TEST: begin
-                raw_result = 64'd0;  // result is always 0 for TEST
+                raw_result = 64'd0;
                 // TEST does not produce a meaningful carry/overflow; flags
                 // are derived from the AND result (zero / negative only).
             end
 
             // ---- MIN / MAX (signed) ----
             OP_MIN: begin
-                raw_result = (op_a_signed < op_b_signed) ? op_a_i : op_b_i;
+                raw_result = (op_a_sext < op_b_sext) ? op_a_m : op_b_m;
             end
 
             OP_MAX: begin
-                raw_result = (op_a_signed > op_b_signed) ? op_a_i : op_b_i;
+                raw_result = (op_a_sext > op_b_sext) ? op_a_m : op_b_m;
             end
 
             // ---- MIN / MAX (unsigned) ----
             OP_MINU: begin
-                raw_result = (op_a_i < op_b_i) ? op_a_i : op_b_i;
+                raw_result = (op_a_m < op_b_m) ? op_a_m : op_b_m;
             end
 
             OP_MAXU: begin
-                raw_result = (op_a_i > op_b_i) ? op_a_i : op_b_i;
+                raw_result = (op_a_m > op_b_m) ? op_a_m : op_b_m;
             end
 
             // ---- Bit Manipulation ----
@@ -372,6 +427,9 @@ module misc_alu (
             end
 
             // ---- Sign / Zero Extension ----
+            //   These intentionally operate on the *raw* input so callers
+            //   can transform a sub-word value sitting in the low bits
+            //   without needing to have masked it first.
             OP_SEXT_B: begin
                 raw_result = {{56{op_a_i[7]}}, op_a_i[7:0]};
             end
@@ -406,19 +464,20 @@ module misc_alu (
 
     // -------------------------------------------------------------------------
     // Flag generation
+    //   CMP and TEST have raw_result forced to 0 above, so we re-derive their
+    //   flags here from the actual comparison value.  All flags operate within
+    //   the active data width.
     // -------------------------------------------------------------------------
-    // For CMP: compare op_a and op_b (subtraction flags)
-    // For TEST: AND op_a and op_b, then check flags
     logic [63:0] cmp_result_masked;
     assign cmp_result_masked = (alu_op_i == OP_CMP) ? (sub_ext[63:0] & data_mask) :
-                               (alu_op_i == OP_TEST) ? ((op_a_i & op_b_i) & data_mask) :
+                               (alu_op_i == OP_TEST) ? ((op_a_m & op_b_m) & data_mask) :
                                masked_result;
 
     assign zero_o = (cmp_result_masked == 64'd0);
 
     // negative flag: MSB of the result within the current data width
     assign negative_o = (alu_op_i == OP_CMP) ? sub_ext[msb_pos] :
-                        (alu_op_i == OP_TEST) ? (op_a_i[msb_pos] & op_b_i[msb_pos]) :
+                        (alu_op_i == OP_TEST) ? (op_a_m[msb_pos] & op_b_m[msb_pos]) :
                         masked_result[msb_pos];
 
     // overflow flag
