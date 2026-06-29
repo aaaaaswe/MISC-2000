@@ -1,37 +1,8 @@
-//=============================================================================
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//=============================================================================
-//
-// misc_exception — Exception and instruction-length management module
-// for the MISC-2000 processor.
-//
-// Responsibilities:
-//   - Priority-encode exceptions arriving from IFU, decode, and memory stages
-//   - Assert a one-cycle exception_taken pulse to the CSR module
-//   - Latch faulting instruction PC, ILEN, and cause for CSR capture
-//   - Drive exception_target_pc_o (handler vector / ERET target) to the pipeline
-//   - Drive eret_target_pc_o for ERET return address forwarding
-//   - Enforce all-or-nothing semantics: exception_active_o stalls memory
-//     side-effects until the exception is resolved via ERET
-//
-// Exception priority (highest to lowest):
-//   1. IFU instruction page fault          cause = 0x0C
-//   2. Memory (data) load/store page fault cause = 0x0D
-//   3. IFU illegal instruction / atomic cross-page cause = 0x02
-//   4. Decode illegal instruction          cause = 0x02
-//
-// Exception handler vector: 0x8000_0000
-//=============================================================================
+// Copyright 2026 The MISC-2000 Authors.
+// SPDX-License-Identifier: Apache-2.0
+// MISC-2000 Exception & instruction-length management — priority encoder (IFU page fault > mem page fault > illegal instr).
+// Latches PC/ILEN/cause on exception_taken pulse to CSR; enforces all-or-nothing semantics.
+// ERET target: CSR_EPC + CSR_ILLEN; handler vector: 0x8000_0000.
 
 module misc_exception #(
     parameter int DATA_WIDTH = 64,

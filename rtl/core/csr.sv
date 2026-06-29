@@ -1,32 +1,9 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// =============================================================================
-// MISC-2000 Control and Status Register (CSR) Module
-// =============================================================================
-// Implements the key CSR registers for exception handling and atomic
-// instruction (LL/SC) support.
-//
-// CSR Address Map (12-bit):
-//   12'h300  CSR_EPC           Exception Program Counter            R/W
-//   12'h301  CSR_ILLEN         Exception Instruction Length         R/W
-//   12'h302  CSR_ECAUSE        Exception Cause                      R/W
-//   12'h303  CSR_ETVAL         Exception Trap Value                 R/W
-//   12'h304  CSR_ESTATUS       Exception Status                     R/W
-//   12'h340  CSR_MONITOR_ADDR  LL/SC Monitor Address (64B aligned)  R/W
-//   12'h341  CSR_MONITOR_VALID LL/SC Monitor Valid                  R/W
+// MISC-2000 Control and Status Register (CSR) module — exception handling and LL/SC support.
+// CSR_EPC (0x300), CSR_ILLEN (0x301), CSR_ECAUSE (0x302), CSR_ETVAL (0x303), CSR_ESTATUS (0x304).
+// LL/SC: CSR_MONITOR_ADDR (0x340), CSR_MONITOR_VALID (0x341).
+// ERET target: mepc + decoded_ilen; SC success requires monitor_valid asserted.
 
 module misc_csr #(
     parameter int DATA_WIDTH = 64,

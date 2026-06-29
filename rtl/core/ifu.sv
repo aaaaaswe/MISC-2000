@@ -1,39 +1,8 @@
-//=============================================================================
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//=============================================================================
-//
-// misc_ifu — Instruction Fetch Unit for the MISC-2000 processor
-//
-// Variable-length CISC instruction fetch:
-//   first byte bit[7:6] == 00 → 2 bytes
-//   first byte bit[7:6] == 01 → 4 bytes  (includes all atomic opcodes)
-//   first byte bit[7:6] == 10 → 6 bytes
-//   first byte bit[7:6] == 11 → 8 bytes
-//
-// Memory is read in 2-byte (16-bit) chunks.  The unit accumulates bytes
-// into a 64-bit instruction buffer and presents a complete instruction
-// when the DONE state is reached.
-//
-// Cross-page (4 KB) detection:
-//   (instr_start_addr[11:0] + byte_len) > 13'h1000
-//
-// Atomic instructions (opcodes 0x144–0x148) are 4-byte fixed-length and
-// must never cross a page boundary; an illegal-instruction exception is
-// raised if they do.
-//
-// On any page fault the exception address always reflects the original
-// instruction start address, not the intermediate fetch address.
-//=============================================================================
+// Copyright 2026 The MISC-2000 Authors.
+// SPDX-License-Identifier: Apache-2.0
+// MISC-2000 Instruction Fetch Unit — variable-length CISC (2/4/6/8 bytes by bit[7:6]).
+// Reads in 2-byte chunks; cross-page faults report instruction start address.
+// Atomic opcodes 0x144–0x148 are 4-byte fixed-length and must not cross pages.
 
 module misc_ifu #(
     parameter int DATA_WIDTH = 64,

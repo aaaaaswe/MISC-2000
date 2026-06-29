@@ -1,32 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// =============================================================================
-// MISC-2000 GETILEN (Get Instruction Length) Auxiliary Instruction Module
-// =============================================================================
-// GETILEN is an auxiliary instruction (opcode 0x14F) that reads the first byte
-// of the target address and returns the instruction length (2, 4, 6, or 8 bytes)
-// to the destination register, WITHOUT executing the target instruction.
-//
-// Format: GETILEN.IMM Rd, [address]
-//
-// The first byte of the target instruction encodes the length in bit[7:6]:
-//   00 -> 2 bytes, 01 -> 4 bytes, 10 -> 6 bytes, 11 -> 8 bytes
-//
-// On memory page fault, exception_o is asserted with exception_addr_o set to
-// the GETILEN operand address (target_addr_i).
+// MISC-2000 GETILEN (Get Instruction Length) — opcode 0x14F, reads target byte bit[7:6] -> length (2/4/6/8).
+// Returns instruction length to Rd without executing target. Page fault exception_addr = operand address.
 
 module misc_getilen #(
     parameter int DATA_WIDTH = 64,

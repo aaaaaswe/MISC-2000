@@ -1,43 +1,8 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// =============================================================================
-// MISC-2000 Atomic Instruction Support Module
-// =============================================================================
-// Implements LL (Load-Linked), SC (Store-Conditional), CAS (Compare-And-Swap),
-// and FENCE memory barrier instructions for the MISC-2000 processor.
-//
-// State machine:
-//   IDLE          -> wait for valid atomic instruction
-//   READ_MEM      -> issue memory read request
-//   WAIT_READ     -> wait for memory read to complete
-//   CHECK_MONITOR -> check if exclusive monitor is still valid (SC only)
-//   WRITE_MEM     -> issue memory write request (SC / CAS)
-//   WAIT_WRITE    -> wait for memory write to complete
-//   DONE          -> output result to register file
-//
-// Opcode map:
-//   0x040  LL.D   Load-Linked Doubleword      (vendor micro-op zone)
-//   0x041  SC.D   Store-Conditional Doubleword (vendor micro-op zone)
-//   0x144  CAS.IMM   Compare-And-Swap with immediate compare
-//   0x145  CAS.REG   Compare-And-Swap register-to-register
-//   0x146  CAS.DIR   Compare-And-Swap direct addressing
-//   0x147  CAS.IDX   Compare-And-Swap indexed addressing
-//   0x148  CAS.STK   Compare-And-Swap stack-relative
-//   0x15E  FENCE  Memory barrier
-// =============================================================================
+// MISC-2000 Atomic Instruction Support — LL.D, SC.D, CAS.D (opcodes 0x040, 0x041, 0x144–0x148), FENCE (0x15E).
+// State: IDLE → READ_MEM → WAIT_READ → CHECK_MONITOR → WRITE_MEM → WAIT_WRITE → DONE.
+// LL sets 64-byte aligned monitor; SC succeeds only if monitor_valid; CAS compares and swaps.
 
 module misc_atomic #(
     parameter int DATA_WIDTH = 64,
