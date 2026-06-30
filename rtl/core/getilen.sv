@@ -52,9 +52,9 @@ module misc_getilen #(
     // -------------------------------------------------------------------------
     state_t state_q, state_next;
 
-    logic                   is_getilen;         // Decoded GETILEN instruction
-    logic [1:0]             instr_len_enc;      // Instruction length encoding from bit[7:6]
-    logic [DATA_WIDTH-1:0]  length_result;      // Decoded instruction length (2/4/6/8)
+    logic                       is_getilen;         // Decoded GETILEN instruction
+    logic [ADDR_WIDTH-1:0]      addr_q;             // Registered memory address
+    logic [DATA_WIDTH-1:0]      result_q;           // Registered result
 
     // -------------------------------------------------------------------------
     // GETILEN instruction detection
@@ -62,33 +62,39 @@ module misc_getilen #(
     assign is_getilen = (opcode_i == OPCODE_GETILEN) && instr_valid_i;
 
     // -------------------------------------------------------------------------
-    // Instruction length decoding from the first byte bit[7:6]
+    // Instruction length decoding helper
     // -------------------------------------------------------------------------
-    assign instr_len_enc = mem_rdata_i[7:6];
-
-    always_comb begin
-        unique case (instr_len_enc)
-            2'b00:   length_result = { {(DATA_WIDTH-2){1'b0}}, 2'd2 };
-            2'b01:   length_result = { {(DATA_WIDTH-3){1'b0}}, 3'd4 };
-            2'b10:   length_result = { {(DATA_WIDTH-3){1'b0}}, 3'd6 };
-            2'b11:   length_result = { {(DATA_WIDTH-4){1'b0}}, 4'd8 };
-            default: length_result = { {(DATA_WIDTH-2){1'b0}}, 2'd2 };
+    function automatic logic [DATA_WIDTH-1:0] decode_length(input logic [7:0] byte_val);
+        unique case (byte_val[7:6])
+            2'b00:   decode_length = {{(DATA_WIDTH-2){1'b0}}, 2'd2};
+            2'b01:   decode_length = {{(DATA_WIDTH-3){1'b0}}, 3'd4};
+            2'b10:   decode_length = {{(DATA_WIDTH-3){1'b0}}, 3'd6};
+            2'b11:   decode_length = {{(DATA_WIDTH-4){1'b0}}, 4'd8};
+            default: decode_length = {{(DATA_WIDTH-2){1'b0}}, 2'd2};
         endcase
-    end
+    endfunction
 
     // -------------------------------------------------------------------------
-    // State machine: sequential logic
+    // State machine: sequential logic (registers)
     // -------------------------------------------------------------------------
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
-            state_q <= ST_IDLE;
+            state_q  <= ST_IDLE;
+            addr_q   <= {ADDR_WIDTH{1'b0}};
+            result_q <= {DATA_WIDTH{1'b0}};
         end else begin
-            state_q <= state_next;
+            state_q  <= state_next;
+            if (state_q == ST_IDLE && is_getilen) begin
+                addr_q <= target_addr_i;
+            end
+            if (state_q == ST_WAIT_READ && mem_ready_i && !mem_page_fault_i) begin
+                result_q <= decode_length(mem_rdata_i);
+            end
         end
     end
 
     // -------------------------------------------------------------------------
-    // State machine: next-state logic (combinational)
+    // State machine: next-state logic and outputs (combinational)
     // -------------------------------------------------------------------------
     always_comb begin
         state_next = state_q;
@@ -103,7 +109,7 @@ module misc_getilen #(
             end
 
             ST_WAIT_READ: begin
-                if (mem_ready_i | mem_page_fault_i)
+                if (mem_ready_i || mem_page_fault_i)
                     state_next = ST_DONE;
             end
 
@@ -119,8 +125,10 @@ module misc_getilen #(
 
     // -------------------------------------------------------------------------
     // Memory interface outputs
+    //   Address is registered to avoid glitches; read enable is active during
+    //   the READ_BYTE state (one-cycle request pulse).
     // -------------------------------------------------------------------------
-    assign mem_addr_o = target_addr_i;
+    assign mem_addr_o = addr_q;
     assign mem_read_o = (state_q == ST_READ_BYTE);
 
     // -------------------------------------------------------------------------
@@ -130,12 +138,12 @@ module misc_getilen #(
     // GETILEN operand address (target_addr_i), not any instruction address.
     // -------------------------------------------------------------------------
     assign exception_o      = (state_q == ST_WAIT_READ) && mem_page_fault_i;
-    assign exception_addr_o = target_addr_i;
+    assign exception_addr_o = addr_q;
 
     // -------------------------------------------------------------------------
     // Result outputs
     // -------------------------------------------------------------------------
-    assign result_o       = length_result;
+    assign result_o       = result_q;
     assign result_valid_o = (state_q == ST_DONE) && !mem_page_fault_i;
 
     // -------------------------------------------------------------------------

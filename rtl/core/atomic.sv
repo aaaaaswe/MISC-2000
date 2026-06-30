@@ -184,12 +184,12 @@ module misc_atomic #(
                 if (instr_valid_i && is_atomic && !is_fence && !cross_page) begin
                     if (is_ll || is_cas) begin
                         // LL and CAS first read from memory
-                        mem_addr_o <= rs1_data_i[ADDR_WIDTH-1:0];
-                        mem_read_o <= 1'b1;
-                        state_d    <= STATE_READ_MEM;
+                        mem_addr_o = rs1_data_i[ADDR_WIDTH-1:0];
+                        mem_read_o = 1'b1;
+                        state_d    = STATE_READ_MEM;
                     end else if (is_sc) begin
                         // SC: transition to monitor check state
-                        state_d    <= STATE_CHECK_MONITOR;
+                        state_d    = STATE_CHECK_MONITOR;
                     end
                 end
             end
@@ -198,8 +198,8 @@ module misc_atomic #(
             // READ_MEM — issue memory read request
             // ===============================================================
             STATE_READ_MEM: begin
-                mem_read_o <= 1'b0;
-                state_d    <= STATE_WAIT_READ;
+                mem_read_o = 1'b0;
+                state_d    = STATE_WAIT_READ;
             end
 
             // ===============================================================
@@ -209,33 +209,33 @@ module misc_atomic #(
                 if (mem_ready_i) begin
                     if (mem_page_fault_i) begin
                         // Page fault: propagate exception
-                        exception_o      <= 1'b1;
-                        exception_addr_o <= addr_q;
-                        state_d          <= STATE_IDLE;
+                        exception_o      = 1'b1;
+                        exception_addr_o = addr_q;
+                        state_d          = STATE_IDLE;
                     end else begin
                         if (is_ll_q) begin
                             // LL.D: record monitor address (64-byte aligned region)
-                            ll_exec_o <= 1'b1;
-                            ll_addr_o <= addr_q;
-                            result_o  <= mem_rdata_i;
-                            result_valid_o <= 1'b1;
-                            state_d   <= STATE_DONE;
+                            ll_exec_o = 1'b1;
+                            ll_addr_o = addr_q;
+                            result_o  = mem_rdata_i;
+                            result_valid_o = 1'b1;
+                            state_d   = STATE_DONE;
                         end else if (is_cas_q) begin
                             // CAS.D: compare read value with compare value
                             if (mem_rdata_i == wdata_q) begin
                                 // Values match — issue write to update memory
-                                mem_wdata_o <= wdata_q;
-                                mem_write_o <= 1'b1;
-                                state_d     <= STATE_WRITE_MEM;
+                                mem_wdata_o = wdata_q;
+                                mem_write_o = 1'b1;
+                                state_d     = STATE_WRITE_MEM;
                             end else begin
                                 // Values differ — skip write, return old value
-                                result_o       <= mem_rdata_i;
-                                result_valid_o <= 1'b1;
-                                state_d        <= STATE_DONE;
+                                result_o       = mem_rdata_i;
+                                result_valid_o = 1'b1;
+                                state_d        = STATE_DONE;
                             end
                         end else begin
                             // Safety: unknown operation, go back to IDLE
-                            state_d <= STATE_IDLE;
+                            state_d = STATE_IDLE;
                         end
                     end
                 end
@@ -246,18 +246,18 @@ module misc_atomic #(
             // ===============================================================
             STATE_CHECK_MONITOR: begin
                 // Assert sc_exec_o to query CSR monitor status
-                sc_exec_o <= 1'b1;
+                sc_exec_o = 1'b1;
                 // sc_success_i is combinational: sc_exec_i & monitor_valid
                 if (sc_success_i) begin
                     // Monitor valid — proceed to write
-                    mem_wdata_o <= wdata_q;
-                    mem_write_o <= 1'b1;
-                    state_d     <= STATE_WRITE_MEM;
+                    mem_wdata_o = wdata_q;
+                    mem_write_o = 1'b1;
+                    state_d     = STATE_WRITE_MEM;
                 end else begin
                     // Monitor lost — return failure code (1) to rd
-                    result_o       <= {{(DATA_WIDTH-1){1'b0}}, 1'b1};
-                    result_valid_o <= 1'b1;
-                    state_d        <= STATE_DONE;
+                    result_o       = {{(DATA_WIDTH-1){1'b0}}, 1'b1};
+                    result_valid_o = 1'b1;
+                    state_d        = STATE_DONE;
                 end
             end
 
@@ -265,8 +265,8 @@ module misc_atomic #(
             // WRITE_MEM — issue memory write request
             // ===============================================================
             STATE_WRITE_MEM: begin
-                mem_write_o <= 1'b0;
-                state_d     <= STATE_WAIT_WRITE;
+                mem_write_o = 1'b0;
+                state_d     = STATE_WAIT_WRITE;
             end
 
             // ===============================================================
@@ -276,19 +276,19 @@ module misc_atomic #(
                 if (mem_ready_i) begin
                     if (mem_page_fault_i) begin
                         // Page fault during write
-                        exception_o      <= 1'b1;
-                        exception_addr_o <= addr_q;
-                        state_d          <= STATE_IDLE;
+                        exception_o      = 1'b1;
+                        exception_addr_o = addr_q;
+                        state_d          = STATE_IDLE;
                     end else begin
                         if (is_sc_q) begin
                             // SC success: return 0
-                            result_o <= {DATA_WIDTH{1'b0}};
+                            result_o = {DATA_WIDTH{1'b0}};
                         end else if (is_cas_q) begin
                             // CAS success: return old value
-                            result_o <= read_data_q;
+                            result_o = read_data_q;
                         end
-                        result_valid_o <= 1'b1;
-                        state_d <= STATE_DONE;
+                        result_valid_o = 1'b1;
+                        state_d = STATE_DONE;
                     end
                 end
             end
@@ -297,12 +297,12 @@ module misc_atomic #(
             // DONE — output result, return to IDLE
             // ===============================================================
             STATE_DONE: begin
-                result_valid_o <= 1'b0;
-                state_d        <= STATE_IDLE;
+                result_valid_o = 1'b0;
+                state_d        = STATE_IDLE;
             end
 
             default: begin
-                state_d <= STATE_IDLE;
+                state_d = STATE_IDLE;
             end
 
         endcase
