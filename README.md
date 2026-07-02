@@ -3,6 +3,7 @@
 > **CISC 为表，RISC 为里 · CISC Outside, RISC Inside**
 
 ---
+注意本项目已停更
 
 <p align="center">
   <strong>中文</strong> &nbsp;|&nbsp; <a href="#english">English</a>
