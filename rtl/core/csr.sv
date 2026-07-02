@@ -151,9 +151,9 @@ module misc_csr #(
             end
 
             // ---------------------------------------------------------------
-            // SC instruction: clear monitor on success
+            // SC instruction: clear monitor unconditionally after execution
             // ---------------------------------------------------------------
-            if (sc_exec_i && monitor_valid) begin
+            if (sc_exec_i) begin
                 monitor_valid <= 1'b0;
             end
 

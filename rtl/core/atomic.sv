@@ -163,13 +163,8 @@ module misc_atomic #(
         busy_o            = 1'b0;
         fence_exec_o      = 1'b0;
 
-        // ----- FENCE handling (in any state, combinational pulse) --------
-        if (instr_valid_i && is_fence) begin
-            fence_exec_o = 1'b1;
-        end
-
         // ----- Cross-page detection ---------------------------------------
-        if (instr_valid_i && is_atomic && !is_fence && cross_page) begin
+        if (instr_valid_i && is_atomic && cross_page) begin
             exception_o      = 1'b1;
             exception_addr_o = inst_addr_i;
         end
@@ -181,14 +176,16 @@ module misc_atomic #(
             // IDLE — wait for valid atomic instruction
             // ===============================================================
             STATE_IDLE: begin
-                if (instr_valid_i && is_atomic && !is_fence && !cross_page) begin
-                    if (is_ll || is_cas) begin
-                        // LL and CAS first read from memory
+                if (instr_valid_i && is_atomic && !cross_page) begin
+                    if (is_fence) begin
+                        fence_exec_o = 1'b1;
+                        result_valid_o = 1'b1;
+                        state_d = STATE_DONE;
+                    end else if (is_ll || is_cas) begin
                         mem_addr_o = rs1_data_i[ADDR_WIDTH-1:0];
                         mem_read_o = 1'b1;
                         state_d    = STATE_READ_MEM;
                     end else if (is_sc) begin
-                        // SC: transition to monitor check state
                         state_d    = STATE_CHECK_MONITOR;
                     end
                 end

@@ -76,7 +76,7 @@ test_regfile.vvp: $(RTL_DIR)/regfile.sv $(SIM_DIR)/test_regfile.sv $(RTL_SRCS)
 
 test_getilen.vvp: $(RTL_DIR)/getilen.sv $(SIM_DIR)/test_getilen.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_getilen.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_getilen.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/getilen.sv $(SIM_DIR)/test_getilen.sv
 
 test_ifu.vvp: $(RTL_DIR)/ifu.sv $(SIM_DIR)/test_ifu.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_ifu.vvp ..."
