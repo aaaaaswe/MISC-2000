@@ -104,7 +104,7 @@ module misc_atomic #(
     // =========================================================================
     logic cross_page;
 
-    assign cross_page = (inst_addr_i[11:0] + 12'd4) > 12'h1000;
+    assign cross_page = (inst_addr_i[11:0] > 12'hFFC);
 
     // =========================================================================
     // Internal registers
@@ -311,23 +311,26 @@ module misc_atomic #(
     end
 
     // =========================================================================
-    // Assertions (synthesis off)
+    // Assertions (simulation only)
     // =========================================================================
     // synthesis translate_off
     `ifndef SYNTHESIS
     // Check that FENCE is a one-cycle pulse
-    property fence_pulse;
-        @(posedge clk_i) disable iff (!rst_n_i)
-        instr_valid_i && is_fence |=> !fence_exec_o;
-    endproperty
-    assert property (fence_pulse);
+    always @(posedge clk_i) begin
+        if (rst_n_i && instr_valid_i && is_fence) begin
+            @(posedge clk_i);
+            if (fence_exec_o) begin
+                $error("FENCE exec should not be asserted more than one cycle");
+            end
+        end
+    end
 
     // Check that we don't drive read and write simultaneously
-    property no_read_write_conflict;
-        @(posedge clk_i) disable iff (!rst_n_i)
-        !(mem_read_o && mem_write_o);
-    endproperty
-    assert property (no_read_write_conflict);
+    always @(posedge clk_i) begin
+        if (rst_n_i && mem_read_o && mem_write_o) begin
+            $error("Simultaneous mem_read and mem_write asserted");
+        end
+    end
     `endif
     // synthesis translate_on
 

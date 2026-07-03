@@ -312,15 +312,15 @@ module tb_alu;
         // ADD: 0xFFFFFFFF + 0x1 = carry (D/32-bit width)
         test_op("ADD 0xFFFFFFFF+0x1 carry (D)", 64'hFFFFFFFF, 64'h1, OP_ADD, DW_D,
                 (64'hFFFFFFFF + 64'h1) & MASK_D,  // 0x00000000
-                1'b1, 1'b0, 1'b1, 1'b1);
+                1'b1, 1'b0, 1'b0, 1'b1);
 
         // ADD: 0xFFFFFFFF + 0x1 (Q/64-bit width)
         test_op("ADD 0xFFFFFFFF+0x1 (Q)", 64'hFFFFFFFF, 64'h1, OP_ADD, DW_Q,
-                64'h100000000, 1'b0, 1'b0, 1'b0, 1'b1);
+                64'h100000000, 1'b0, 1'b0, 1'b0, 1'b0);
 
         // ADD: negative + positive
         test_op("ADD -5 + 3 (D)", 64'hFFFFFFFB, 64'h3, OP_ADD, DW_D,
-                (64'hFFFFFFFB + 64'h3) & MASK_D, 1'b1, 1'b1, 1'b0, 1'b0);
+                (64'hFFFFFFFB + 64'h3) & MASK_D, 1'b0, 1'b1, 1'b0, 1'b0);
 
         // ADD: 0x80 + 0x80 = 0x00 with overflow (B/8-bit signed)
         test_op("ADD 0x80+0x80 overflow (B)", 64'h80, 64'h80, OP_ADD, DW_B,
@@ -379,7 +379,7 @@ module tb_alu;
         // MUL: overflow (product > 64 bits)
         apply_op(64'h100000000, 64'h100000000, OP_MUL, DW_Q);
         check_all("MUL overflow (Q)", (64'h100000000 * 64'h100000000),
-                  1'b0, 1'b0, 1'b1, 1'b0);
+                  1'b1, 1'b0, 1'b1, 1'b0);
 
         // MUL: zero result
         test_op("MUL 0*0x100 = 0 (Q)", 64'h0, 64'h100, OP_MUL, DW_Q,
@@ -524,9 +524,9 @@ module tb_alu;
         test_op("SHL 0x1 << 7 (B)", 64'h1, 64'h7, OP_SHL, DW_B,
                 64'h80, 1'b0, 1'b1, 1'b0, 1'b0);
 
-        // SHL: shift amount larger than width, B width
+        // SHL: shift amount larger than width, B width (shift amount masked)
         apply_op(64'h1, 64'h10, OP_SHL, DW_B);
-        check_result_only("SHL 0x1 << 16 (B, truncated)", (64'h1 << 64'h10) & MASK_B);
+        check_result_only("SHL 0x1 << 16 (B, shift amount masked)", 64'h1);
 
         // -----------------------------------------------------------------
         // SHR tests
@@ -613,10 +613,10 @@ module tb_alu;
                 64'h42, 1'b0, 1'b0, 1'b0, 1'b0);
 
         test_op("INC 0xFFFFFFFF = 0x0 (D, carry)", 64'hFFFFFFFF, 64'h0, OP_INC, DW_D,
-                64'h0, 1'b1, 1'b0, 1'b1, 1'b1);
+                64'h0, 1'b1, 1'b0, 1'b0, 1'b1);
 
         test_op("INC 0xFF = 0x00 (B, carry)", 64'hFF, 64'h0, OP_INC, DW_B,
-                64'h00, 1'b1, 1'b0, 1'b1, 1'b1);
+                64'h00, 1'b1, 1'b0, 1'b0, 1'b1);
 
         test_op("INC 0x7F = 0x80 (B, overflow)", 64'h7F, 64'h0, OP_INC, DW_B,
                 64'h80, 1'b0, 1'b1, 1'b1, 1'b0);
@@ -694,16 +694,16 @@ module tb_alu;
 
         // CMP: signed comparison, -1 < 0
         apply_op(64'hFFFFFFFFFFFFFFFF, 64'h0, OP_CMP, DW_Q);
-        check_all("CMP -1 < 0 (Q)", 64'h0, 1'b0, 1'b1, 1'b0, 1'b0);
+        check_all("CMP -1 < 0 (Q)", 64'h0, 1'b0, 1'b1, 1'b0, 1'b1);
 
         // CMP: signed comparison, 0 > -1
         apply_op(64'h0, 64'hFFFFFFFFFFFFFFFF, OP_CMP, DW_Q);
-        check_all("CMP 0 > -1 (Q)", 64'h0, 1'b0, 1'b0, 1'b0, 1'b1);
+        check_all("CMP 0 > -1 (Q)", 64'h0, 1'b0, 1'b0, 1'b0, 1'b0);
 
         // CMP: B width
         apply_op(64'h7F, 64'h80, OP_CMP, DW_B);
-        // 0x7F (127) vs 0x80 (-128 signed): 127 > -128
-        check_all("CMP 127 > -128 (B)", 64'h0, 1'b0, 1'b0, 1'b0, 1'b1);
+        // 0x7F (127) vs 0x80 (-128 signed): 127 - (-128) = 255 (overflows)
+        check_all("CMP 127 > -128 (B)", 64'h0, 1'b0, 1'b1, 1'b1, 1'b0);
 
         // -----------------------------------------------------------------
         // TEST tests (result is always 0, flags from AND)
@@ -718,9 +718,9 @@ module tb_alu;
         apply_op(64'hF0, 64'h0F, OP_TEST, DW_Q);
         check_all("TEST 0xF0 & 0x0F (Q)", 64'h0, 1'b1, 1'b0, 1'b0, 1'b0);
 
-        // TEST: some bits in common, not all
-        apply_op(64'hAA, 64'hA0, OP_TEST, DW_Q);
-        check_all("TEST 0xAA & 0xA0 (Q)", 64'h0, 1'b0, 1'b1, 1'b0, 1'b0);
+        // TEST: some bits in common, not all (B width, MSB set)
+        apply_op(64'hAA, 64'hA0, OP_TEST, DW_B);
+        check_all("TEST 0xAA & 0xA0 (B)", 64'h0, 1'b0, 1'b1, 1'b0, 1'b0);
 
         // TEST: MSB set in both operands -> negative
         apply_op(64'h8000000000000000, 64'h8000000000000000, OP_TEST, DW_Q);

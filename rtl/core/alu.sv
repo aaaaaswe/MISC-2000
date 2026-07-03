@@ -67,7 +67,7 @@ module misc_alu (
     logic [ 5:0] msb_pos;          // index of the MSB for the active data width
     logic [ 5:0] shift_amt;        // limited shift amount (0..msb_pos)
 
-    always_comb begin
+    always @(*) begin
         case (data_width_i)
             3'd0: begin  // Byte
                 data_mask = 64'h0000_0000_0000_00FF;
@@ -100,7 +100,7 @@ module misc_alu (
     // Values larger than msb_pos are wrapped to keep the result deterministic
     // and to avoid undefined behaviour when a user-supplied shift amount
     // exceeds the active data width.
-    always_comb begin
+    always @(*) begin
         case (data_width_i)
             3'd0:    shift_amt = {3'd0, op_b_i[2:0]};
             3'd1:    shift_amt = {2'd0, op_b_i[3:0]};
@@ -114,9 +114,12 @@ module misc_alu (
     // bit 63.  This is used for OP_SAR, OP_MIN, OP_MAX, OP_NEG, OP_ABS.
     function automatic logic [63:0] sext_active(logic [63:0] val);
         logic sign_bit;
+        integer i;
         sign_bit = val[msb_pos];
         sext_active = val & data_mask;
-        sext_active[63:msb_pos] = {(64 - msb_pos){sign_bit}};
+        for (i = msb_pos + 1; i < 64; i++) begin
+            sext_active[i] = sign_bit;
+        end
     endfunction
 
     // -------------------------------------------------------------------------
@@ -137,9 +140,25 @@ module misc_alu (
     logic signed [63:0] op_a_sext;
     logic signed [63:0] op_b_sext;
 
-    always_comb begin
-        op_a_sext = $signed(sext_active(op_a_i));
-        op_b_sext = $signed(sext_active(op_b_i));
+    always @(*) begin
+        case (data_width_i)
+            3'd0: begin
+                op_a_sext = $signed({{56{op_a_i[7]}}, op_a_i[7:0]});
+                op_b_sext = $signed({{56{op_b_i[7]}}, op_b_i[7:0]});
+            end
+            3'd1: begin
+                op_a_sext = $signed({{48{op_a_i[15]}}, op_a_i[15:0]});
+                op_b_sext = $signed({{48{op_b_i[15]}}, op_b_i[15:0]});
+            end
+            3'd2: begin
+                op_a_sext = $signed({{32{op_a_i[31]}}, op_a_i[31:0]});
+                op_b_sext = $signed({{32{op_b_i[31]}}, op_b_i[31:0]});
+            end
+            default: begin
+                op_a_sext = $signed(op_a_i);
+                op_b_sext = $signed(op_b_i);
+            end
+        endcase
     end
 
     // Extended add/sub for carry/borrow detection.  Uses the masked
@@ -149,6 +168,24 @@ module misc_alu (
 
     assign add_ext = {1'b0, op_a_m} + {1'b0, op_b_m};
     assign sub_ext = {1'b0, op_a_m} - {1'b0, op_b_m};
+
+    // Carry-out at the active data width (bit position msb_pos+1).
+    logic add_carry;
+    logic sub_borrow;
+    always @(*) begin
+        case (data_width_i)
+            3'd0:   add_carry = add_ext[8];
+            3'd1:   add_carry = add_ext[16];
+            3'd2:   add_carry = add_ext[32];
+            default: add_carry = add_ext[64];
+        endcase
+        case (data_width_i)
+            3'd0:   sub_borrow = sub_ext[8];
+            3'd1:   sub_borrow = sub_ext[16];
+            3'd2:   sub_borrow = sub_ext[32];
+            default: sub_borrow = sub_ext[64];
+        endcase
+    end
 
     // -------------------------------------------------------------------------
     // Arithmetic helpers
@@ -168,7 +205,7 @@ module misc_alu (
     //   All helpers operate on the zero-masked input so bits above the
     //   active data width cannot corrupt the result.
     // -------------------------------------------------------------------------
-    function automatic logic [63:0] clz_func(input logic [63:0] val);
+    function automatic logic [63:0] clz_func(logic [63:0] val);
         logic [63:0] v;
         integer i;
         v = val & data_mask;
@@ -176,12 +213,12 @@ module misc_alu (
         for (i = msb_pos; i >= 0; i--) begin
             if (v[i]) begin
                 clz_func = 64'(msb_pos - i);
-                return;
+                i = -1;
             end
         end
     endfunction
 
-    function automatic logic [63:0] ctz_func(input logic [63:0] val);
+    function automatic logic [63:0] ctz_func(logic [63:0] val);
         logic [63:0] v;
         integer i;
         v = val & data_mask;
@@ -189,7 +226,7 @@ module misc_alu (
         for (i = 0; i <= msb_pos; i++) begin
             if (v[i]) begin
                 ctz_func = 64'(i);
-                return;
+                i = msb_pos + 1;
             end
         end
     endfunction
@@ -241,7 +278,7 @@ module misc_alu (
     //     output (masked_result), so it is fine if computation temporarily
     //     produces non-zero bits above msb_pos.
     // -------------------------------------------------------------------------
-    always_comb begin
+    always @(*) begin
         raw_result   = 64'd0;
         raw_overflow = 1'b0;
         raw_carry    = 1'b0;
@@ -250,7 +287,7 @@ module misc_alu (
             // ---- Arithmetic ----
             OP_ADD: begin
                 raw_result   = add_ext[63:0];
-                raw_carry    = add_ext[64];
+                raw_carry    = add_carry;
                 // Signed overflow: same-sign operands produce opposite-sign result.
                 raw_overflow = (op_a_m[msb_pos] == op_b_m[msb_pos]) &&
                                (raw_result[msb_pos] != op_a_m[msb_pos]);
@@ -258,7 +295,7 @@ module misc_alu (
 
             OP_SUB: begin
                 raw_result   = sub_ext[63:0];
-                raw_carry    = ~sub_ext[64];  // borrow flag (inverted carry)
+                raw_carry    = ~sub_borrow;  // borrow flag (inverted carry)
                 // Signed overflow: opposite-sign operands produce op_a's sign.
                 raw_overflow = (op_a_m[msb_pos] != op_b_m[msb_pos]) &&
                                (raw_result[msb_pos] != op_a_m[msb_pos]);
@@ -266,8 +303,13 @@ module misc_alu (
 
             OP_MUL: begin
                 raw_result = mul_full[63:0];
-                // Overflow: upper 64 bits of 128-bit product are non-zero.
-                raw_overflow = |mul_full[127:64];
+                // Overflow: upper half of product (at active width) is non-zero.
+                case (data_width_i)
+                    3'd0:   raw_overflow = |mul_full[15:8];
+                    3'd1:   raw_overflow = |mul_full[31:16];
+                    3'd2:   raw_overflow = |mul_full[63:32];
+                    default: raw_overflow = |mul_full[127:64];
+                endcase
             end
 
             OP_DIV: begin
@@ -360,7 +402,7 @@ module misc_alu (
             OP_CMP: begin
                 raw_result = 64'd0;
                 // Re-use subtract carry/borrow for flag generation.
-                raw_carry    = ~sub_ext[64];
+                raw_carry    = ~sub_borrow;
                 raw_overflow = (op_a_m[msb_pos] != op_b_m[msb_pos]) &&
                                (sub_ext[msb_pos] != op_a_m[msb_pos]);
             end

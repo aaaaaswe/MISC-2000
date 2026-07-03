@@ -62,33 +62,33 @@ compile_exception: $(VCD_DIR) test_exception.vvp
 compile_atomic: $(VCD_DIR) test_atomic.vvp
 compile_getilen: $(VCD_DIR) test_getilen.vvp
 
-test_alu.vvp: $(RTL_DIR)/alu.sv $(SIM_DIR)/test_alu.sv $(RTL_SRCS)
+test_alu.vvp: $(SIM_DIR)/test_alu.sv $(RTL_DIR)/alu.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_alu.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/alu.sv $(SIM_DIR)/test_alu.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_alu.sv
 
-test_decoder.vvp: $(RTL_DIR)/decoder.sv $(SIM_DIR)/test_decoder.sv $(RTL_SRCS)
+test_decoder.vvp: $(SIM_DIR)/test_decoder.sv $(RTL_DIR)/decoder.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_decoder.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/decoder.sv $(SIM_DIR)/test_decoder.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_decoder.sv
 
-test_regfile.vvp: $(RTL_DIR)/regfile.sv $(SIM_DIR)/test_regfile.sv $(RTL_SRCS)
+test_regfile.vvp: $(SIM_DIR)/test_regfile.sv $(RTL_DIR)/regfile.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_regfile.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/regfile.sv $(SIM_DIR)/test_regfile.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_regfile.sv
 
-test_getilen.vvp: $(RTL_DIR)/getilen.sv $(SIM_DIR)/test_getilen.sv
+test_getilen.vvp: $(SIM_DIR)/test_getilen.sv $(RTL_DIR)/getilen.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_getilen.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/getilen.sv $(SIM_DIR)/test_getilen.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_getilen.sv
 
-test_ifu.vvp: $(RTL_DIR)/ifu.sv $(SIM_DIR)/test_ifu.sv
+test_ifu.vvp: $(SIM_DIR)/test_ifu.sv $(RTL_DIR)/ifu.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_ifu.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/ifu.sv $(SIM_DIR)/test_ifu.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_ifu.sv
 
-test_exception.vvp: $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_exception.sv
+test_exception.vvp: $(SIM_DIR)/test_exception.sv $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_exception.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_exception.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_exception.sv
 
-test_atomic.vvp: $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
+test_atomic.vvp: $(SIM_DIR)/test_atomic.sv $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_atomic.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_atomic.sv
 
 # ---- Run Targets -------------------------------------------------------------
 run_alu: $(VCD_DIR) test_alu.vvp

@@ -73,14 +73,16 @@ module tb_regfile;
         input logic [63:0]      data,
         input logic [2:0]       width = 3'd3
     );
-        rd_addr   <= addr[4:0];
-        rd_data   <= data;
-        rd_wen    <= 1'b1;
-        rd_width  <= width;
-        @(posedge clk);
-        rd_wen    <= 1'b0;
-        rd_addr   <= '0;
-        rd_data   <= '0;
+        begin
+            rd_addr   = addr[4:0];
+            rd_data   = data;
+            rd_wen    = 1'b1;
+            rd_width  = width;
+            @(posedge clk);
+            rd_wen    = 1'b0;
+            rd_addr   = '0;
+            rd_data   = '0;
+        end
     endtask
 
     task automatic read_port1(
@@ -99,8 +101,10 @@ module tb_regfile;
         input int addr1,
         input int addr2
     );
-        rs1_addr <= addr1[4:0];
-        rs2_addr <= addr2[4:0];
+        begin
+            rs1_addr <= addr1[4:0];
+            rs2_addr <= addr2[4:0];
+        end
     endtask
 
     task automatic check_equal(
@@ -108,21 +112,25 @@ module tb_regfile;
         input logic [63:0] actual,
         input logic [63:0] expected
     );
-        if (actual === expected) begin
-            $display("[PASS] %s: got 0x%016h", test_name, actual);
-            pass_cnt++;
-        end else begin
-            $display("[FAIL] %s: expected 0x%016h, got 0x%016h",
-                     test_name, expected, actual);
-            fail_cnt++;
+        begin
+            if (actual === expected) begin
+                $display("[PASS] %s: got 0x%016h", test_name, actual);
+                pass_cnt++;
+            end else begin
+                $display("[FAIL] %s: expected 0x%016h, got 0x%016h",
+                         test_name, expected, actual);
+                fail_cnt++;
+            end
         end
     endtask
 
     task automatic apply_reset();
-        rst_n <= 1'b0;
-        repeat (3) @(posedge clk);
-        rst_n <= 1'b1;
-        @(posedge clk);
+        begin
+            rst_n <= 1'b0;
+            repeat (3) @(posedge clk);
+            rst_n <= 1'b1;
+            @(posedge clk);
+        end
     endtask
 
     // -----------------------------------------------------------------------
