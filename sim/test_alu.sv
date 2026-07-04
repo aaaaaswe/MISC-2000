@@ -20,7 +20,6 @@
 // Tests all ALU operations across all data widths (B/W/D/Q).
 // Verifies result_o, zero_o, negative_o, overflow_o, and carry_o flags.
 
-`include "../rtl/core/alu.sv"
 
 module tb_alu;
 

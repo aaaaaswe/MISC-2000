@@ -20,7 +20,6 @@
 // Tests all instruction length decoding (2B/4B/6B/8B), page fault handling,
 // busy signal behavior, and opcode gating.
 
-`include "../rtl/core/getilen.sv"
 
 module tb_getilen;
 
@@ -341,10 +340,10 @@ module tb_getilen;
         //   - target_addr = 0xF000 (unmapped page)
         //   - Memory returns page fault
         //   - Verify exception_o = 1, exception_addr_o = 0xF000
-        //   - Verify result_valid_o = 0 (no result on page fault)
+        //   - Verify result_valid_o = 1 (valid output on both success and fault)
         //
-        // NOTE: exception_o is a 1-cycle strobe asserted during WAIT_READ.
-        // We must check it at the WAIT_READ→DONE negedge, not later.
+        // NOTE: Both result_valid_o and exception_o are registered outputs
+        // asserted during the DONE state (1-cycle pulse).
         // =================================================================
         $display("\n--- Test 5: GETILEN page fault ---");
         begin
@@ -360,9 +359,12 @@ module tb_getilen;
             @(negedge clk);   // let NBA settle
 
             @(posedge clk);   // → WAIT_READ
-            @(negedge clk);   // let NBA settle — exception_o should be asserted here
+            @(negedge clk);   // let NBA settle
 
-            // Check exception during WAIT_READ
+            @(posedge clk);   // → DONE
+            @(negedge clk);   // let NBA settle — result_valid & exception both valid
+
+            // Check exception during DONE
             if (exception !== 1'b1) begin
                 $display("[%0d] FAIL: GETILEN page fault (addr=0xF000)", test_num);
                 $display("       exception_o: expected 1, got %b", exception);
@@ -375,19 +377,13 @@ module tb_getilen;
                 pass = 1'b0;
             end
 
-            @(posedge clk);   // → DONE
-            @(negedge clk);   // let NBA settle — result_valid_o should be 0
-
-            // Check result_valid suppressed (exception_o should be 0 now)
-            if (result_valid !== 1'b0) begin
+            // Check result_valid is also asserted during DONE (consistent with atomic)
+            if (result_valid !== 1'b1) begin
                 if (pass) $display("[%0d] FAIL: GETILEN page fault (addr=0xF000)", test_num);
-                $display("       result_valid_o: expected 0 (suppressed by page fault), got %b",
+                $display("       result_valid_o: expected 1 (valid during DONE), got %b",
                          result_valid);
                 pass = 1'b0;
             end
-
-            // Note: result_o is not checked on page fault — it reflects the
-            // decoded length of whatever garbage data was on the bus.
 
             if (pass) begin
                 $display("[%0d] PASS: GETILEN page fault (addr=0xF000)", test_num);

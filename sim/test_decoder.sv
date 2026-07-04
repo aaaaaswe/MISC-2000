@@ -19,7 +19,6 @@
 // Comprehensive testbench for misc_decoder covering all instruction classes,
 // boundary conditions, special opcodes, and invalid opcodes.
 
-`include "../rtl/core/decoder.sv"
 
 module tb_decoder;
 

@@ -21,8 +21,6 @@
 // CSR read/write, pipeline flush, exception-active state, and all-or-nothing
 // semantics.
 
-`include "../rtl/core/exception.sv"
-`include "../rtl/core/csr.sv"
 
 module tb_exception;
 

@@ -26,7 +26,6 @@
 // Exception tests do not need stall because the exception is latched.
 //=============================================================================
 
-`include "../rtl/core/ifu.sv"
 
 `timescale 1ns / 1ps
 
