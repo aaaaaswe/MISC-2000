@@ -3,7 +3,6 @@
 > **CISC 为表，RISC 为里 · CISC Outside, RISC Inside**
 
 ---
-注意本项目已停更
 
 <p align="center">
   <strong>中文</strong> &nbsp;|&nbsp; <a href="#english">English</a>
@@ -158,9 +157,8 @@ Macro-instructions are decoded at the front-end into one or more RISC-style micr
 #### 环境要求
 
 - **操作系统**：Linux (Ubuntu 20.04+ / CentOS 8+) 或 macOS 12+
-- **工具链**：GCC 11+ / Clang 14+
-- **仿真器**：Verilator 5.0+ 或 ModelSim / Questa
-- **构建工具**：CMake 3.20+, Make, Python 3.9+
+- **仿真器**：Icarus Verilog (iverilog) 或 Verilator 5.0+
+- **构建工具**：GNU Make
 
 #### 克隆仓库
 
@@ -172,29 +170,31 @@ cd misc-2000
 #### 构建与仿真
 
 ```bash
-# 配置构建
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+# 进入仿真目录
+cd sim
 
-# 编译 RTL 仿真
-cmake --build build --target sim
+# 编译并运行所有测试
+make all
 
-# 运行冒烟测试
-cmake --build build --target test
+# 运行单个模块测试
+make test_alu
+make test_decoder
+make test_ifu
 
-# 运行 SPEC 基准测试（可选）
-./scripts/run_benchmarks.sh
+# 查看波形（需要 gtkwave）
+make wave_alu
 ```
 
 #### 自定义 MISC-R 指令
 
-MISC-R 扩展区允许厂商自由修改。在 `src/misc-r/` 目录下编辑对应的微操作定义文件，重新编译即可：
+MISC-R 扩展区允许厂商自由修改。在 `rtl/core/` 目录下编辑对应的微操作实现文件，重新编译即可：
 
 ```bash
 # 编辑自定义微操作
-vim src/misc-r/custom_uops.v
+vim rtl/core/custom_uops.sv
 
-# 重新构建
-cmake --build build --target sim
+# 重新运行仿真
+cd sim && make all
 ```
 
 ### English
@@ -202,9 +202,8 @@ cmake --build build --target sim
 #### Prerequisites
 
 - **OS**: Linux (Ubuntu 20.04+ / CentOS 8+) or macOS 12+
-- **Toolchain**: GCC 11+ / Clang 14+
-- **Simulator**: Verilator 5.0+ or ModelSim / Questa
-- **Build Tools**: CMake 3.20+, Make, Python 3.9+
+- **Simulator**: Icarus Verilog (iverilog) or Verilator 5.0+
+- **Build Tools**: GNU Make
 
 #### Clone the Repository
 
@@ -216,29 +215,31 @@ cd misc-2000
 #### Build & Simulate
 
 ```bash
-# Configure build
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+# Enter simulation directory
+cd sim
 
-# Compile RTL simulation
-cmake --build build --target sim
+# Compile and run all tests
+make all
 
-# Run smoke tests
-cmake --build build --target test
+# Run individual module tests
+make test_alu
+make test_decoder
+make test_ifu
 
-# Run SPEC benchmarks (optional)
-./scripts/run_benchmarks.sh
+# View waveforms (requires gtkwave)
+make wave_alu
 ```
 
 #### Customize MISC-R Instructions
 
-The MISC-R extension zone is freely customizable. Edit the micro-op definition files under `src/misc-r/` and rebuild:
+The MISC-R extension zone is freely customizable. Edit the micro-op implementation files under `rtl/core/` and rebuild:
 
 ```bash
 # Edit custom micro-ops
-vim src/misc-r/custom_uops.v
+vim rtl/core/custom_uops.sv
 
-# Rebuild
-cmake --build build --target sim
+# Re-run simulation
+cd sim && make all
 ```
 
 ---
@@ -251,34 +252,33 @@ cmake --build build --target sim
 misc-2000/
 ├── README.md                  # 项目说明文档（本文件）
 ├── LICENSE                    # Apache 2.0 许可证文件
-├── CMakeLists.txt             # 顶层 CMake 构建配置
+├── .gitignore                 # Git 忽略文件配置
 │
-├── docs/                      # 文档目录
-│   ├── arch/                  #   架构设计文档
-│   │   ├── isa_manual_cn.pdf  #     指令集手册（中文）
-│   │   └── isa_manual_en.pdf  #     指令集手册（英文）
-│   └── microarch/             #   微架构文档
-│       └── pipeline.pdf       #     流水线设计说明
+├── doc/                       # 文档目录
+│   ├── architecture.md        #   架构设计文档（中英双语）
+│   └── isa.md                 #   指令集规范文档（中英双语）
 │
-├── src/                       # RTL 源码
-│   ├── core/                  #   处理器核心 (双发射 OoO, ROB, 寄存器重命名)
-│   ├── decode/                #   译码模块 (CISC → μOP 翻译)
-│   ├── execute/               #   执行单元 (ALU, FPU, LSU)
-│   ├── misc-r/                #   MISC-R 厂商可定制微操作区
-│   └── memory/                #   存储子系统 (Cache, TLB, MMU)
+├── rtl/                       # RTL 源码
+│   ├── core/                  #   处理器核心模块
+│   │   ├── alu.sv             #     算术逻辑单元
+│   │   ├── decoder.sv         #     指令译码器
+│   │   ├── regfile.sv         #     寄存器文件
+│   │   ├── pipeline_ctrl.sv   #     流水线控制器
+│   │   ├── ifu.sv             #     取指单元（变长指令）
+│   │   ├── exception.sv       #     异常与长度管理
+│   │   ├── csr.sv             #     控制状态寄存器
+│   │   ├── atomic.sv          #     原子指令支持
+│   │   └── getilen.sv         #     GETILEN 辅助指令
+│   ├── include/               #   公共头文件与宏定义
+│   └── top/                   #   顶层模块与集成
 │
-├── test/                      # 测试目录
-│   ├── unit/                  #   单元测试
-│   ├── integration/           #   集成测试
-│   └── benchmarks/            #   基准测试程序
+├── sim/                       # 仿真测试
+│   ├── Makefile               #   仿真构建脚本
+│   ├── test_*.sv              #   各模块测试用例
+│   └── waves/                 #   波形文件输出目录
 │
-├── scripts/                   # 辅助脚本
-│   ├── run_benchmarks.sh      #   基准测试运行脚本
-│   └── gen_isa_tables.py      #   指令编码表生成脚本
-│
-└── tools/                     # 工具链
-    ├── assembler/             #   汇编器
-    └── disassembler/          #   反汇编器
+├── sw/                        # 软件与固件
+└── tools/                     # 工具链与辅助工具
 ```
 
 ### English
@@ -287,34 +287,33 @@ misc-2000/
 misc-2000/
 ├── README.md                  # Project documentation (this file)
 ├── LICENSE                    # Apache 2.0 license file
-├── CMakeLists.txt             # Top-level CMake build configuration
+├── .gitignore                 # Git ignore configuration
 │
-├── docs/                      # Documentation
-│   ├── arch/                  #   Architecture design docs
-│   │   ├── isa_manual_cn.pdf  #     ISA manual (Chinese)
-│   │   └── isa_manual_en.pdf  #     ISA manual (English)
-│   └── microarch/             #   Microarchitecture docs
-│       └── pipeline.pdf       #     Pipeline design notes
+├── doc/                       # Documentation
+│   ├── architecture.md        #   Architecture design doc (bilingual)
+│   └── isa.md                 #   ISA specification (bilingual)
 │
-├── src/                       # RTL source
-│   ├── core/                  #   Processor core (dual-issue OoO, ROB, renaming)
-│   ├── decode/                #   Decode module (CISC → μOP translation)
-│   ├── execute/               #   Execution units (ALU, FPU, LSU)
-│   ├── misc-r/                #   MISC-R vendor-customizable micro-op zone
-│   └── memory/                #   Memory subsystem (Cache, TLB, MMU)
+├── rtl/                       # RTL source code
+│   ├── core/                  #   Processor core modules
+│   │   ├── alu.sv             #     Arithmetic Logic Unit
+│   │   ├── decoder.sv         #     Instruction decoder
+│   │   ├── regfile.sv         #     Register file
+│   │   ├── pipeline_ctrl.sv   #     Pipeline controller
+│   │   ├── ifu.sv             #     Instruction Fetch Unit (variable-length)
+│   │   ├── exception.sv       #     Exception & length management
+│   │   ├── csr.sv             #     Control & Status Registers
+│   │   ├── atomic.sv          #     Atomic instruction support
+│   │   └── getilen.sv         #     GETILEN helper instruction
+│   ├── include/               #   Common headers & macros
+│   └── top/                   #   Top-level modules & integration
 │
-├── test/                      # Testing
-│   ├── unit/                  #   Unit tests
-│   ├── integration/           #   Integration tests
-│   └── benchmarks/            #   Benchmark programs
+├── sim/                       # Simulation & testing
+│   ├── Makefile               #   Simulation build script
+│   ├── test_*.sv              #   Module testbenches
+│   └── waves/                 #   Waveform output directory
 │
-├── scripts/                   # Helper scripts
-│   ├── run_benchmarks.sh      #   Benchmark runner
-│   └── gen_isa_tables.py      #   ISA encoding table generator
-│
-└── tools/                     # Toolchain
-    ├── assembler/             #   Assembler
-    └── disassembler/          #   Disassembler
+├── sw/                        # Software & firmware
+└── tools/                     # Toolchain & utilities
 ```
 
 ---
@@ -364,10 +363,10 @@ Key points summary:
 
 3. **编写测试**：所有新增或修改的逻辑须附带单元测试，确保覆盖率不降低。
 
-4. **通过 CI 检查**：
+4. **通过验证**：
    ```bash
-   cmake --build build --target lint    # 代码风格检查
-   cmake --build build --target test    # 运行全部测试
+   cd sim
+   make all    # 编译并运行全部测试
    ```
 
 5. **提交 Pull Request**：在 PR 描述中清晰说明变更动机、实现方式与测试结果。
@@ -389,10 +388,10 @@ Contributions to MISC-2000 are welcome! Please follow the process below:
 
 3. **Write tests**: All new or modified logic must include unit tests to ensure coverage does not regress.
 
-4. **Pass CI checks**:
+4. **Pass verification**:
    ```bash
-   cmake --build build --target lint    # Lint check
-   cmake --build build --target test    # Run all tests
+   cd sim
+   make all    # Compile and run all tests
    ```
 
 5. **Submit a Pull Request**: Clearly describe the motivation, implementation approach, and test results in the PR description.
