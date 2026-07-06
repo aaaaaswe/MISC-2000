@@ -38,7 +38,7 @@ module tb_atomic;
     // Opcode Constants
     // =========================================================================
     localparam logic [10:0] OP_LL_D    = 11'h040;
-    localparam logic [10:0] OP_SC_D    = 11'h0C0;  // SC.D opcode in 0x0C0-0x0FF range
+    localparam logic [10:0] OP_SC_D    = 11'h041;
     localparam logic [10:0] OP_CAS_IMM = 11'h144;
     localparam logic [10:0] OP_FENCE   = 11'h15E;
 
@@ -83,11 +83,11 @@ module tb_atomic;
     // =========================================================================
     // DUT Signals — misc_csr
     // =========================================================================
+    logic                       csr_ren_i;
+    logic                       csr_wen_i;
     logic [11:0]                csr_addr;
+    logic [DATA_WIDTH-1:0]      csr_wdata;
     logic [DATA_WIDTH-1:0]      csr_rdata;
-    logic                       csr_monitor_set;
-    logic [ADDR_WIDTH-1:0]      csr_monitor_addr;
-    logic                       csr_monitor_clear;
 
     // =========================================================================
     // Memory Model
@@ -168,22 +168,23 @@ module tb_atomic;
     ) u_csr (
         .clk_i            (clk),
         .rst_n_i          (rst_n),
+        .csr_ren_i        (csr_ren_i),
+        .csr_wen_i        (csr_wen_i),
         .csr_addr_i       (csr_addr),
+        .csr_wdata_i      (csr_wdata),
         .csr_rdata_o      (csr_rdata),
-        .monitor_set_i    (csr_monitor_set),
-        .monitor_addr_i   (csr_monitor_addr),
-        .monitor_clear_i  (csr_monitor_clear)
+        .exception_taken_i(1'b0),
+        .exception_pc_i   ('0),
+        .exception_ilen_i ('0),
+        .exception_cause_i('0),
+        .eret_exec_i      (1'b0),
+        .eret_target_o    (),
+        .ll_exec_i        (ll_exec),
+        .ll_addr_i        (ll_addr),
+        .sc_exec_i        (sc_exec),
+        .sc_success_o     (sc_success),
+        .monitor_clear_i  (1'b0)
     );
-
-    // =========================================================================
-    // Inter-module connections
-    // =========================================================================
-    // atomic LL execution sets CSR monitor
-    assign csr_monitor_set  = ll_exec;
-    assign csr_monitor_addr = ll_addr;
-
-    // CSR-initiated monitor clear is not used in this testbench
-    assign csr_monitor_clear = 1'b0;
 
     // =========================================================================
     // Memory Model Logic
@@ -253,19 +254,7 @@ module tb_atomic;
     end
 
     // =========================================================================
-    // SC Success Logic — driven by testbench monitor tracking
-    // =========================================================================
-    // When the atomic module executes SC, we determine success based on
-    // whether the monitor is still valid and the address matches.
-    always_comb begin
-        if (sc_exec && tb_monitor_valid && (mem_addr == tb_monitor_addr))
-            sc_success = 1'b1;
-        else
-            sc_success = 1'b0;
-    end
-
-    // =========================================================================
-    // Monitor tracking for testbench
+    // Monitor tracking for testbench (for verification purposes only)
     // =========================================================================
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -276,11 +265,7 @@ module tb_atomic;
                 tb_monitor_valid <= 1'b1;
                 tb_monitor_addr  <= ll_addr;
             end
-            if (monitor_clear) begin
-                tb_monitor_valid <= 1'b0;
-            end
-            // SC also clears monitor on success
-            if (sc_exec && tb_monitor_valid && (mem_addr == tb_monitor_addr)) begin
+            if (monitor_clear || (sc_exec && sc_success)) begin
                 tb_monitor_valid <= 1'b0;
             end
         end
@@ -304,17 +289,19 @@ module tb_atomic;
     // Initialize all DUT inputs to safe defaults
     // -------------------------------------------------------------------------
     task automatic init_inputs();
-        opcode       <= 11'h000;
-        rd_addr      <= 5'd0;
-        rs1_addr     <= 5'd0;
-        rs2_addr     <= 5'd0;
-        rs1_data     <= '0;
-        rs2_data     <= '0;
-        inst_addr    <= '0;
-        instr_valid  <= 1'b0;
-        monitor_clear <= 1'b0;
-        csr_addr     <= 12'h000;
-        csr_monitor_clear <= 1'b0;
+        opcode           <= 11'h000;
+        rd_addr          <= 5'd0;
+        rs1_addr         <= 5'd0;
+        rs2_addr         <= 5'd0;
+        rs1_data         <= '0;
+        rs2_data         <= '0;
+        inst_addr        <= '0;
+        instr_valid      <= 1'b0;
+        monitor_clear    <= 1'b0;
+        csr_ren_i        <= 1'b0;
+        csr_wen_i        <= 1'b0;
+        csr_addr         <= 12'h000;
+        csr_wdata        <= '0;
         mem_fault_inject <= 1'b0;
     endtask
 
@@ -380,11 +367,12 @@ module tb_atomic;
         input  logic [11:0]           addr,
         output logic [DATA_WIDTH-1:0] data
     );
-        csr_addr <= addr;
+        csr_ren_i <= 1'b1;
+        csr_addr  <= addr;
         @(posedge clk);
-        @(posedge clk);  // wait one extra cycle for CSR read to settle
         data = csr_rdata;
-        csr_addr <= 12'h000;
+        csr_ren_i <= 1'b0;
+        csr_addr  <= 12'h000;
     endtask
 
     // -------------------------------------------------------------------------
