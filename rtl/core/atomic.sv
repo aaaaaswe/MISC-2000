@@ -17,8 +17,10 @@ module misc_atomic #(
     input  logic [4:0]                   rd_addr_i,
     input  logic [4:0]                   rs1_addr_i,
     input  logic [4:0]                   rs2_addr_i,
+    input  logic [4:0]                   rs3_addr_i,
     input  logic [DATA_WIDTH-1:0]        rs1_data_i,
     input  logic [DATA_WIDTH-1:0]        rs2_data_i,
+    input  logic [DATA_WIDTH-1:0]        rs3_data_i,
     input  logic [ADDR_WIDTH-1:0]        inst_addr_i,
     input  logic                         instr_valid_i,
 
@@ -111,7 +113,8 @@ module misc_atomic #(
     // =========================================================================
     logic [DATA_WIDTH-1:0]   read_data_q;      // data read from memory (LL / CAS)
     logic [ADDR_WIDTH-1:0]   addr_q;           // latched memory address
-    logic [DATA_WIDTH-1:0]   wdata_q;          // latched write data (SC / CAS)
+    logic [DATA_WIDTH-1:0]   wdata_q;          // latched write data (SC)
+    logic [DATA_WIDTH-1:0]   cas_new_val_q;    // latched new value for CAS
     logic                    is_ll_q;          // current operation is LL
     logic                    is_sc_q;          // current operation is SC
     logic                    is_cas_q;         // current operation is CAS
@@ -125,6 +128,7 @@ module misc_atomic #(
             read_data_q    <= {DATA_WIDTH{1'b0}};
             addr_q         <= {ADDR_WIDTH{1'b0}};
             wdata_q        <= {DATA_WIDTH{1'b0}};
+            cas_new_val_q  <= {DATA_WIDTH{1'b0}};
             is_ll_q        <= 1'b0;
             is_sc_q        <= 1'b0;
             is_cas_q       <= 1'b0;
@@ -133,6 +137,9 @@ module misc_atomic #(
             if (state_q == STATE_IDLE && instr_valid_i && is_atomic && !is_fence && !cross_page) begin
                 addr_q     <= rs1_data_i[ADDR_WIDTH-1:0];
                 wdata_q    <= rs2_data_i;
+                if (is_cas) begin
+                    cas_new_val_q <= rs3_data_i;
+                end
                 is_ll_q    <= is_ll;
                 is_sc_q    <= is_sc;
                 is_cas_q   <= is_cas;
@@ -218,10 +225,10 @@ module misc_atomic #(
                             result_valid_o = 1'b1;
                             state_d   = STATE_DONE;
                         end else if (is_cas_q) begin
-                            // CAS.D: compare read value with compare value
+                            // CAS.D: compare read value with expected value (rs2_data_i)
                             if (mem_rdata_i == wdata_q) begin
-                                // Values match — issue write to update memory
-                                mem_wdata_o = wdata_q;
+                                // Values match — issue write to update memory with new value (rs3_data_i)
+                                mem_wdata_o = cas_new_val_q;
                                 mem_write_o = 1'b1;
                                 state_d     = STATE_WRITE_MEM;
                             end else begin

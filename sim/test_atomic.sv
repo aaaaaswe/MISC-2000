@@ -57,8 +57,10 @@ module tb_atomic;
     logic [4:0]                 rd_addr;
     logic [4:0]                 rs1_addr;
     logic [4:0]                 rs2_addr;
+    logic [4:0]                 rs3_addr;
     logic [DATA_WIDTH-1:0]      rs1_data;
     logic [DATA_WIDTH-1:0]      rs2_data;
+    logic [DATA_WIDTH-1:0]      rs3_data;
     logic [ADDR_WIDTH-1:0]      inst_addr;
     logic                       instr_valid;
     logic [ADDR_WIDTH-1:0]      mem_addr;
@@ -135,8 +137,10 @@ module tb_atomic;
         .rd_addr_i       (rd_addr),
         .rs1_addr_i      (rs1_addr),
         .rs2_addr_i      (rs2_addr),
+        .rs3_addr_i      (rs3_addr),
         .rs1_data_i      (rs1_data),
         .rs2_data_i      (rs2_data),
+        .rs3_data_i      (rs3_data),
         .inst_addr_i     (inst_addr),
         .instr_valid_i   (instr_valid),
         .mem_addr_o      (mem_addr),
@@ -293,8 +297,10 @@ module tb_atomic;
         rd_addr          <= 5'd0;
         rs1_addr         <= 5'd0;
         rs2_addr         <= 5'd0;
+        rs3_addr         <= 5'd0;
         rs1_data         <= '0;
         rs2_data         <= '0;
+        rs3_data         <= '0;
         inst_addr        <= '0;
         instr_valid      <= 1'b0;
         monitor_clear    <= 1'b0;
@@ -321,11 +327,13 @@ module tb_atomic;
         input logic [10:0]           op,
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [DATA_WIDTH-1:0] rs2_val,
+        input logic [DATA_WIDTH-1:0] rs3_val,
         input logic [ADDR_WIDTH-1:0] i_addr
     );
         opcode      <= op;
         rs1_data    <= addr;
         rs2_data    <= rs2_val;
+        rs3_data    <= rs3_val;
         inst_addr   <= i_addr;
         instr_valid <= 1'b1;
         @(posedge clk);
@@ -480,7 +488,7 @@ module tb_atomic;
         clear_captures();
 
         // Issue LL.D at address 0x1000
-        issue_instr(OP_LL_D, 64'h1000, 64'h0, 64'h0);
+        issue_instr(OP_LL_D, 64'h1000, 64'h0, 64'h0, 64'h0);
 
         // Wait for memory read to complete
         wait_mem_ready();
@@ -521,13 +529,13 @@ module tb_atomic;
         // First execute LL.D at address 0x2000 (sets monitor)
         mem_store(64'h2000, 64'h0);  // initial value (don't care)
         clear_captures();
-        issue_instr(OP_LL_D, 64'h2000, 64'h0, 64'h0);
+        issue_instr(OP_LL_D, 64'h2000, 64'h0, 64'h0, 64'h0);
         wait_mem_ready();
         wait_result_valid();
 
         // Now execute SC.D at address 0x2000 with store data
         clear_captures();
-        issue_instr(OP_SC_D, 64'h2000, 64'h12345678_9ABCDEF0, 64'h0);
+        issue_instr(OP_SC_D, 64'h2000, 64'h12345678_9ABCDEF0, 64'h0, 64'h0);
 
         // Wait for SC to complete (memory write + result)
         wait_mem_ready();
@@ -549,7 +557,7 @@ module tb_atomic;
         mem_store(64'h3000, 64'hAAAAAAAA_BBBBBBBB);
 
         // Execute LL.D at address 0x3000
-        issue_instr(OP_LL_D, 64'h3000, 64'h0, 64'h0);
+        issue_instr(OP_LL_D, 64'h3000, 64'h0, 64'h0, 64'h0);
         wait_mem_ready();
         wait_result_valid();
 
@@ -560,7 +568,7 @@ module tb_atomic;
         monitor_clear <= 1'b0;
 
         // Execute SC.D at address 0x3000
-        issue_instr(OP_SC_D, 64'h3000, 64'hDEADDEAD_DEADDEAD, 64'h0);
+        issue_instr(OP_SC_D, 64'h3000, 64'hDEADDEAD_DEADDEAD, 64'h0, 64'h0);
         wait_mem_ready();
         wait_result_valid();
 
@@ -577,14 +585,11 @@ module tb_atomic;
         // Preload memory at 0x4000 with compare value
         mem_store(64'h4000, 64'h11111111_22222222);
 
-        // Issue CAS.D: rs1_data = address (0x4000), rs2_data = compare value
-        // CAS.D stores new value (from rs2_data upper or encoded) and returns old value
-        // The CAS.D opcode 0x144 uses rs2_data as the new value to write,
-        // and compares against memory. If match, writes new value.
-        // For CAS.D, we need to provide the new value somehow.
-        // In typical CAS encoding, rs2 holds new value, memory holds old/expected.
-        // Let's use: rs2_data = new_value, and the compare value is in memory.
-        issue_instr(OP_CAS_IMM, 64'h4000, 64'hCAFECAFE_CAFECAFE, 64'h0);
+        // Issue CAS.D: rs1_data = address (0x4000), rs2_data = expected value, rs3_data = new value
+        // CAS.D compares memory value with expected value (rs2_data).
+        // If match, writes new value (rs3_data) to memory and returns old value.
+        // If no match, returns old value without modifying memory.
+        issue_instr(OP_CAS_IMM, 64'h4000, 64'h11111111_22222222, 64'hCAFECAFE_CAFECAFE, 64'h0);
 
         wait_mem_ready();  // CAS reads memory
         // CAS may need another memory cycle for write
@@ -602,11 +607,12 @@ module tb_atomic;
         // =====================================================================
         $display("\n--- Test 6: CAS.D — Compare and Swap (no match) ---");
 
-        // Preload memory at 0x5000 with a DIFFERENT value than compare
+        // Preload memory at 0x5000 with a value
         mem_store(64'h5000, 64'hFFFFFFFF_00000000);
 
-        // Issue CAS.D with new value (different from memory)
-        issue_instr(OP_CAS_IMM, 64'h5000, 64'hBEEFBEEF_BEEFBEEF, 64'h0);
+        // Issue CAS.D: expected value (rs2_data) is different from memory
+        // This should NOT write to memory
+        issue_instr(OP_CAS_IMM, 64'h5000, 64'hAAAA_AAAA, 64'hBEEFBEEF_BEEFBEEF, 64'h0);
 
         wait_mem_ready();
         if (mem_read || mem_write)
@@ -627,7 +633,7 @@ module tb_atomic;
         // Set opcode in 0x144-0x148 range (CAS range)
         // The 4-byte instruction at 0x1FFE spans [0x1FFE, 0x1FFF, 0x2000, 0x2001]
         // which crosses the 4KB page boundary at 0x2000
-        issue_instr(OP_CAS_IMM, 64'h0, 64'h0, 64'h1FFE);
+        issue_instr(OP_CAS_IMM, 64'h0, 64'h0, 64'h0, 64'h1FFE);
 
         wait_result_valid();
 
@@ -642,7 +648,7 @@ module tb_atomic;
         clear_captures();
 
         // Issue FENCE opcode
-        issue_instr(OP_FENCE, 64'h0, 64'h0, 64'h0);
+        issue_instr(OP_FENCE, 64'h0, 64'h0, 64'h0, 64'h0);
 
         // FENCE should pulse fence_exec_o for one cycle
         // Wait a few cycles for the pulse to be captured
@@ -661,7 +667,7 @@ module tb_atomic;
         mem_fault_inject <= 1'b0;
 
         // Issue LL.D
-        issue_instr(OP_LL_D, 64'h6000, 64'h0, 64'h0);
+        issue_instr(OP_LL_D, 64'h6000, 64'h0, 64'h0, 64'h0);
 
         // Wait for memory response (which will have page_fault)
         wait_mem_ready();
@@ -678,7 +684,7 @@ module tb_atomic;
 
         // First execute LL.D at address 0x7000 (success)
         mem_store(64'h7000, 64'h0);
-        issue_instr(OP_LL_D, 64'h7000, 64'h0, 64'h0);
+        issue_instr(OP_LL_D, 64'h7000, 64'h0, 64'h0, 64'h0);
         wait_mem_ready();
         wait_result_valid();
 
@@ -688,7 +694,7 @@ module tb_atomic;
         mem_fault_inject <= 1'b0;
 
         // Execute SC.D at address 0x7000
-        issue_instr(OP_SC_D, 64'h7000, 64'hFEEDFEED_FEEDFEED, 64'h0);
+        issue_instr(OP_SC_D, 64'h7000, 64'hFEEDFEED_FEEDFEED, 64'h0, 64'h0);
 
         wait_mem_ready();
         wait_result_valid();
