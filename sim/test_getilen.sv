@@ -327,10 +327,6 @@ module tb_getilen;
         //   - target_addr = 0x100C
         //   - Memory returns 0xC0 (bit[7:6]=11 → 8B)
         //   - Verify result_o = 8
-        //
-        // NOTE: This test is expected to FAIL due to an RTL bug:
-        //   getilen.sv:99 uses 3'd8, but 8 requires 4 bits (3'd truncates to 0).
-        //   The fix is to change 3'd8 to 4'd8 on that line.
         // =================================================================
         $display("\n--- Test 4: GETILEN reads 8-byte instruction length ---");
         test_getilen("GETILEN 8B (addr=0x100C, byte=0xC0)",
@@ -553,7 +549,6 @@ module tb_getilen;
                      64'h1008, 64'd6, 1'b1, 1'b0, 64'h0);
 
         // Test 8d: 0xFF → 8B
-        // NOTE: Expected to FAIL due to RTL bug (3'd8 truncated to 0 at getilen.sv:99).
         mem[8'h0C] = 8'hFF;
         test_getilen("GETILEN var. patterns: 0xFF → 8B (addr=0x100C)",
                      64'h100C, 64'd8, 1'b1, 1'b0, 64'h0);
@@ -574,12 +569,6 @@ module tb_getilen;
         end else begin
             $display("  SOME TESTS FAILED!");
             $display("  Failures: %0d", fail_count);
-            $display("");
-            $display("  NOTE: Failures on 8-byte instruction length tests are due");
-            $display("  to an RTL bug in getilen.sv:99 — '3'd8' is truncated to 0");
-            $display("  (8 requires 4 bits).  Fix: change '3'd8' to '4'd8'.");
-            $display("  All other functionality (2B/4B/6B, page fault, busy,");
-            $display("  opcode gating) is verified correct.");
         end
         $display("============================================================\n");
 
