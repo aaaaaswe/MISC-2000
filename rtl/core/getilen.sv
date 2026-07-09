@@ -55,6 +55,7 @@ module misc_getilen #(
     logic                       is_getilen;         // Decoded GETILEN instruction
     logic [ADDR_WIDTH-1:0]      addr_q;             // Registered memory address
     logic [DATA_WIDTH-1:0]      result_q;           // Registered result
+    logic                       page_fault_q;       // Latched page-fault flag
 
     // -------------------------------------------------------------------------
     // GETILEN instruction detection
@@ -79,16 +80,22 @@ module misc_getilen #(
     // -------------------------------------------------------------------------
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
-            state_q  <= ST_IDLE;
-            addr_q   <= {ADDR_WIDTH{1'b0}};
-            result_q <= {DATA_WIDTH{1'b0}};
+            state_q       <= ST_IDLE;
+            addr_q        <= {ADDR_WIDTH{1'b0}};
+            result_q      <= {DATA_WIDTH{1'b0}};
+            page_fault_q  <= 1'b0;
         end else begin
             state_q  <= state_next;
             if (state_q == ST_IDLE && is_getilen) begin
-                addr_q <= target_addr_i;
+                addr_q       <= target_addr_i;
+                page_fault_q <= 1'b0;
             end
-            if (state_q == ST_WAIT_READ && mem_ready_i && !mem_page_fault_i) begin
-                result_q <= decode_length(mem_rdata_i);
+            if (state_q == ST_WAIT_READ) begin
+                if (mem_page_fault_i) begin
+                    page_fault_q <= 1'b1;
+                end else if (mem_ready_i) begin
+                    result_q <= decode_length(mem_rdata_i);
+                end
             end
         end
     end
@@ -144,7 +151,7 @@ module misc_getilen #(
     // Result outputs
     // -------------------------------------------------------------------------
     assign result_o       = result_q;
-    assign result_valid_o = (state_q == ST_DONE) && !mem_page_fault_i;
+    assign result_valid_o = (state_q == ST_DONE) && !page_fault_q;
 
     // -------------------------------------------------------------------------
     // Busy output

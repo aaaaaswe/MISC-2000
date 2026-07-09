@@ -102,11 +102,11 @@ module misc_atomic #(
     // =========================================================================
     // Cross-page detection
     //   All atomic instructions are 4-byte fixed-length.
-    //   Cross-page condition: (inst_addr_i[11:0] + 4) > 12'h1000
+    //   Cross-page condition: (inst_addr_i[11:0] + 4) >= 13'h1000
     // =========================================================================
     logic cross_page;
 
-    assign cross_page = (inst_addr_i[11:0] + 12'd4) > 12'h1000;
+    assign cross_page = (inst_addr_i[11:0] + 13'd4) >= 13'h1000;
 
     // =========================================================================
     // Internal registers

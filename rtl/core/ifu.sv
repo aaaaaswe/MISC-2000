@@ -227,7 +227,7 @@ module misc_ifu #(
                                   (mem_rdata_i[15:0] <= 16'h0148)))) begin
 
                                 // Check cross-page: (start_addr[11:0] + 4) > 4096
-                                if ((instr_start_addr[11:0] + 13'd4) > PAGE_SIZE) begin
+                                if ((instr_start_addr[11:0] + 13'd4) >= PAGE_SIZE) begin
                                     exception_o        <= 1'b1;
                                     exception_cause_o  <= EXC_ATOMIC_CROSS_PAGE;
                                     exception_addr_o   <= instr_start_addr;
