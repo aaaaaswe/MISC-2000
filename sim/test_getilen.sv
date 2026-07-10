@@ -572,7 +572,7 @@ module tb_getilen;
         end
         $display("============================================================\n");
 
-        $stop;
+        $finish;
     end
 
 endmodule

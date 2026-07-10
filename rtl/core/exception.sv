@@ -58,8 +58,6 @@ module misc_exception #(
 
     // IFU exception cause encoding (from IFU)
     localparam logic [1:0] IFU_CAUSE_PAGE_FAULT        = 2'b00;
-    // localparam logic [1:0] IFU_CAUSE_ILLEGAL_INSTR     = 2'b01;
-    // localparam logic [1:0] IFU_CAUSE_ATOMIC_CROSS_PAGE = 2'b10;
 
     // Memory exception cause encoding (from memory stage)
     localparam logic [1:0] MEM_CAUSE_PAGE_FAULT        = 2'b00;

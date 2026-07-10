@@ -648,7 +648,7 @@ module tb_ifu;
         end
         $display("============================================================\n");
 
-        $stop;
+        $finish;
     end
 
 endmodule

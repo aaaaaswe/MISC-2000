@@ -658,7 +658,7 @@ module tb_exception;
             $display("============================================================\n");
         end
 
-        $stop;
+        $finish;
     end
 
 endmodule

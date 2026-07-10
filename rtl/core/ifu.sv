@@ -234,9 +234,6 @@ module misc_ifu #(
                                     fetch_req_o        <= 1'b0;
                                     state              <= IDLE;
                                 end else begin
-                                    // 2-byte instruction? No — atomic is always 4-byte.
-                                    // But the encoding check above already verified
-                                    // bits[7:6] == 01, so proceed to remaining fetch.
                                     fetch_addr_reg <= instr_start_addr + ADDR_WIDTH'(2);
                                     state          <= FETCH_REMAINING;
                                 end
