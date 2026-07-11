@@ -217,14 +217,17 @@ module misc_ifu #(
 
                             // ---- Atomic cross-page check ----
                             // Atomic opcodes are 4-byte fixed-length and MUST
-                            // NOT cross a 4 KB page boundary:
+                            // NOT cross a 4 KB page boundary.  The 11-bit
+                            // opcode sits in mem_rdata_i[10:0]; upper bits
+                            // may carry register / immediate fields and must
+                            // be ignored for opcode matching.
                             //   - LL.D (0x040), SC.D (0x041) — vendor zone
                             //   - CAS.* (0x144–0x148) — standard zone
                             if ((mem_rdata_i[7:6] == 2'b01) &&
-                                ((mem_rdata_i[15:0] == 16'h0040) ||
-                                 (mem_rdata_i[15:0] == 16'h0041) ||
-                                 ((mem_rdata_i[15:0] >= 16'h0144) &&
-                                  (mem_rdata_i[15:0] <= 16'h0148)))) begin
+                                ((mem_rdata_i[10:0] == 11'h040) ||
+                                 (mem_rdata_i[10:0] == 11'h041) ||
+                                 ((mem_rdata_i[10:0] >= 11'h144) &&
+                                  (mem_rdata_i[10:0] <= 11'h148)))) begin
 
                                 // Check cross-page: (start_addr[11:0] + 4) > 4096
                                 if ((instr_start_addr[11:0] + 13'd4) >= PAGE_SIZE) begin

@@ -56,7 +56,7 @@ module misc_csr #(
     logic [15:0]           millen;         // CSR_ILLEN (actual byte count: 2/4/6/8)
     logic [3:0]            mecause;        // CSR_ECAUSE
     logic [ADDR_WIDTH-1:0] metval;         // CSR_ETVAL
-    logic [DATA_WIDTH-1:0] mestatus;        // CSR_ESTATUS
+    logic [DATA_WIDTH-1:0] mestatus;       // CSR_ESTATUS
     logic [ADDR_WIDTH-1:0] monitor_addr;   // CSR_MONITOR_ADDR
     logic                  monitor_valid;  // CSR_MONITOR_VALID
 
