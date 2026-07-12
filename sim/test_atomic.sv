@@ -633,12 +633,24 @@ module tb_atomic;
         // Set opcode in 0x144-0x148 range (CAS range)
         // The 4-byte instruction at 0x1FFE spans [0x1FFE, 0x1FFF, 0x2000, 0x2001]
         // which crosses the 4KB page boundary at 0x2000
-        issue_instr(OP_CAS_IMM, 64'h0, 64'h0, 64'h0, 64'h1FFE);
-
-        wait_result_valid();
+        //
+        // exception_o is registered — it goes high one cycle after the
+        // cross-page instruction is presented.  result_valid is NOT asserted
+        // on cross-page faults.
+        opcode      <= OP_CAS_IMM;
+        rs1_data    <= 64'h0;
+        rs2_data    <= 64'h0;
+        rs3_data    <= 64'h0;
+        inst_addr   <= 64'h1FFE;
+        instr_valid <= 1'b1;
+        @(posedge clk);   // present instruction
+        instr_valid <= 1'b0;
+        @(posedge clk);   // exception_q captures on this edge
 
         check_bool("CAS cross-page: exception_o = 1", exception, 1'b1);
         check_val("CAS cross-page: exception_addr_o = 0x1FFE", exception_addr, 64'h1FFE);
+
+        @(posedge clk);   // exception clears (IDLE, !instr_valid)
 
         // =====================================================================
         // Test 8: FENCE instruction
@@ -672,10 +684,11 @@ module tb_atomic;
         // Wait for memory response (which will have page_fault)
         wait_mem_ready();
 
-        // Wait for result or exception
-        wait_result_valid();
+        // Wait for registered exception (one extra cycle after mem_ready)
+        repeat (2) @(posedge clk);
 
         check_bool("LL.D page fault: exception_o = 1", exception, 1'b1);
+        check_val("LL.D page fault: exception_addr_o = 0x6000", exception_addr, 64'h6000);
 
         // =====================================================================
         // Test 10: SC.D page fault during write
@@ -697,9 +710,12 @@ module tb_atomic;
         issue_instr(OP_SC_D, 64'h7000, 64'hFEEDFEED_FEEDFEED, 64'h0, 64'h0);
 
         wait_mem_ready();
-        wait_result_valid();
+
+        // Wait for registered exception (one extra cycle after mem_ready)
+        repeat (2) @(posedge clk);
 
         check_bool("SC.D page fault: exception_o = 1", exception, 1'b1);
+        check_val("SC.D page fault: exception_addr_o = 0x7000", exception_addr, 64'h7000);
 
         // =====================================================================
         // SUMMARY

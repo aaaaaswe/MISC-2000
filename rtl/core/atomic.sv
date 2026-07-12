@@ -118,22 +118,27 @@ module misc_atomic #(
     logic                    is_ll_q;          // current operation is LL
     logic                    is_sc_q;          // current operation is SC
     logic                    is_cas_q;         // current operation is CAS
+    logic                    exception_q;      // registered exception flag
+    logic [ADDR_WIDTH-1:0]   exception_addr_q; // registered exception address
 
     // =========================================================================
     // State machine — sequential
     // =========================================================================
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
-            state_q        <= STATE_IDLE;
-            read_data_q    <= {DATA_WIDTH{1'b0}};
-            addr_q         <= {ADDR_WIDTH{1'b0}};
-            wdata_q        <= {DATA_WIDTH{1'b0}};
-            cas_new_val_q  <= {DATA_WIDTH{1'b0}};
-            is_ll_q        <= 1'b0;
-            is_sc_q        <= 1'b0;
-            is_cas_q       <= 1'b0;
+            state_q          <= STATE_IDLE;
+            read_data_q      <= {DATA_WIDTH{1'b0}};
+            addr_q           <= {ADDR_WIDTH{1'b0}};
+            wdata_q          <= {DATA_WIDTH{1'b0}};
+            cas_new_val_q    <= {DATA_WIDTH{1'b0}};
+            is_ll_q          <= 1'b0;
+            is_sc_q          <= 1'b0;
+            is_cas_q         <= 1'b0;
+            exception_q      <= 1'b0;
+            exception_addr_q <= {ADDR_WIDTH{1'b0}};
         end else begin
-            state_q        <= state_d;
+            state_q          <= state_d;
+
             if (state_q == STATE_IDLE && instr_valid_i && is_atomic && !is_fence && !cross_page) begin
                 addr_q     <= rs1_data_i[ADDR_WIDTH-1:0];
                 wdata_q    <= rs2_data_i;
@@ -146,6 +151,18 @@ module misc_atomic #(
             end
             if (state_q == STATE_WAIT_READ && mem_ready_i && !mem_page_fault_i) begin
                 read_data_q <= mem_rdata_i;
+            end
+
+            // Latch exception from combinational next-state logic.
+            // Clear when returning to IDLE after an exception is serviced.
+            if ((state_q == STATE_IDLE && instr_valid_i && is_atomic && cross_page) ||
+                ((state_q == STATE_WAIT_READ || state_q == STATE_WAIT_WRITE) &&
+                 mem_ready_i && mem_page_fault_i)) begin
+                exception_q      <= 1'b1;
+                exception_addr_q <= (state_q == STATE_IDLE) ? inst_addr_i : addr_q;
+            end else if (state_q == STATE_IDLE && !instr_valid_i) begin
+                exception_q      <= 1'b0;
+                exception_addr_q <= {ADDR_WIDTH{1'b0}};
             end
         end
     end
@@ -163,18 +180,10 @@ module misc_atomic #(
         ll_exec_o         = 1'b0;
         ll_addr_o         = {ADDR_WIDTH{1'b0}};
         sc_exec_o         = 1'b0;
-        exception_o       = 1'b0;
-        exception_addr_o  = {ADDR_WIDTH{1'b0}};
         result_o          = {DATA_WIDTH{1'b0}};
         result_valid_o    = 1'b0;
         busy_o            = 1'b0;
         fence_exec_o      = 1'b0;
-
-        // ----- Cross-page detection ---------------------------------------
-        if (instr_valid_i && is_atomic && cross_page) begin
-            exception_o      = 1'b1;
-            exception_addr_o = inst_addr_i;
-        end
 
         // ----- Main state machine -----------------------------------------
         unique case (state_q)
@@ -212,9 +221,7 @@ module misc_atomic #(
             STATE_WAIT_READ: begin
                 if (mem_ready_i) begin
                     if (mem_page_fault_i) begin
-                        // Page fault: propagate exception
-                        exception_o      = 1'b1;
-                        exception_addr_o = addr_q;
+                        // Page fault: go to IDLE, exception is registered in sequential block
                         state_d          = STATE_IDLE;
                     end else begin
                         if (is_ll_q) begin
@@ -279,9 +286,7 @@ module misc_atomic #(
             STATE_WAIT_WRITE: begin
                 if (mem_ready_i) begin
                     if (mem_page_fault_i) begin
-                        // Page fault during write
-                        exception_o      = 1'b1;
-                        exception_addr_o = addr_q;
+                        // Page fault during write: go to IDLE, exception registered
                         state_d          = STATE_IDLE;
                     end else begin
                         if (is_sc_q) begin
@@ -316,6 +321,12 @@ module misc_atomic #(
             busy_o = 1'b1;
         end
     end
+
+    // =========================================================================
+    // Registered exception outputs (clean timing, no combinational glitches)
+    // =========================================================================
+    assign exception_o      = exception_q;
+    assign exception_addr_o = exception_addr_q;
 
     // =========================================================================
     // Assertions (synthesis off)

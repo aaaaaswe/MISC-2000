@@ -602,32 +602,45 @@ module tb_ifu;
         @(posedge clk);
 
         // =================================================================
-        // TEST 10: Branch flush
+        // TEST 10: Branch flush and redirection
         // =================================================================
-        $display("\n--- Test 10: Branch flush ---");
-
-        // Note: The current IFU RTL does not implement branch_taken_i /
-        // branch_target_i handling (they are declared as inputs but not
-        // used in the state machine).  This test documents the expected
-        // behaviour — if the RTL is updated to support branches, this
-        // test will validate the implementation.
+        $display("\n--- Test 10: Branch flush and redirection ---");
 
         mem_clear();
-        mem_write(64'h1000, 16'h0042);  // 2B
+        mem_write(64'h1000, 16'h0042);  // 2B at 0x1000
+        mem_write(64'h3000, 16'h0043);  // 2B at 0x3000
 
         stall <= 1'b0;
         pc = 64'h1000;
-        @(posedge clk);   // IDLE → FETCH_FIRST
+        @(posedge clk);   // IDLE → FETCH_FIRST (fetch issued to 0x1000)
 
         // Assert branch_taken during fetch with target 0x3000
         branch_taken  = 1'b1;
         branch_target = 64'h3000;
-        @(posedge clk);
+        @(posedge clk);   // branch flush: IFU → IDLE, fetch_addr set to 0x3000
         branch_taken  = 1'b0;
         branch_target = '0;
 
-        // Verify next_pc_o reflects branch target
-        check64("Test 10: next_pc_o = 0x3000 (branch)", next_pc, 64'h3000);
+        // After branch, IFU should be in IDLE with no valid instruction
+        check_bit("Test 10a: instr_valid_o = 0 after branch", instr_valid, 1'b0);
+        check_bit("Test 10b: exception_o = 0 after branch", exception, 1'b0);
+
+        // fetch_addr_reg should now point to branch target
+        check64("Test 10c: fetch_addr_o = 0x3000 (branch target)", fetch_addr, 64'h3000);
+
+        // Now let the IFU fetch from the branch target (stall=1 to hold DONE)
+        stall <= 1'b1;
+        // One cycle: IDLE → FETCH_FIRST
+        @(posedge clk);
+        // One more cycle: FETCH_FIRST → DONE (2-byte instruction)
+        @(posedge clk);
+
+        // Verify we fetched from 0x3000
+        check_bit("Test 10d: instr_valid_o = 1 after branch fetch", instr_valid, 1'b1);
+        check64("Test 10e: instr_o = 0x0043 (from 0x3000)", instr, 64'h0000000000000043);
+        check64("Test 10f: next_pc_o = 0x3002", next_pc, 64'h3002);
+
+        release_stall();
 
         // =================================================================
         // SUMMARY

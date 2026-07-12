@@ -132,13 +132,14 @@ module misc_ifu #(
             exception_cause_o  <= EXC_PAGE_FAULT;
             exception_addr_o   <= '0;
 
-        end else if (flush_i) begin
+        end else if (flush_i || branch_taken_i) begin
             // ------------------------------------------------------------
-            // Pipeline flush — discard current fetch, return to IDLE
+            // Pipeline flush or taken branch — discard current fetch,
+            // redirect to branch target if branch_taken, else return to IDLE.
             // ------------------------------------------------------------
             state            <= IDLE;
-            fetch_addr_reg   <= '0;
-            instr_start_addr <= '0;
+            fetch_addr_reg   <= branch_taken_i ? branch_target_i : '0;
+            instr_start_addr <= branch_taken_i ? branch_target_i : '0;
             instr_buffer     <= '0;
             instr_len_enc    <= 2'b00;
             bytes_fetched    <= 4'd0;

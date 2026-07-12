@@ -339,8 +339,9 @@ module tb_getilen;
         //   - Verify exception_o = 1, exception_addr_o = 0xF000
         //   - Verify result_valid_o = 0 (no result on page fault)
         //
-        // NOTE: exception_o is a 1-cycle strobe asserted during WAIT_READ.
-        // We must check it at the WAIT_READ→DONE negedge, not later.
+        // NOTE: exception_o is registered — it goes high one cycle after
+        // mem_page_fault_i is sampled in WAIT_READ.  It stays high until
+        // the module returns to IDLE with !is_getilen.
         // =================================================================
         $display("\n--- Test 5: GETILEN page fault ---");
         begin
@@ -356,9 +357,12 @@ module tb_getilen;
             @(negedge clk);   // let NBA settle
 
             @(posedge clk);   // → WAIT_READ
+            @(negedge clk);   // let NBA settle
+
+            @(posedge clk);   // → DONE (page_fault), exception_q set on this edge
             @(negedge clk);   // let NBA settle — exception_o should be asserted here
 
-            // Check exception during WAIT_READ
+            // Check exception after it's been registered
             if (exception !== 1'b1) begin
                 $display("[%0d] FAIL: GETILEN page fault (addr=0xF000)", test_num);
                 $display("       exception_o: expected 1, got %b", exception);
@@ -371,10 +375,7 @@ module tb_getilen;
                 pass = 1'b0;
             end
 
-            @(posedge clk);   // → DONE
-            @(negedge clk);   // let NBA settle — result_valid_o should be 0
-
-            // Check result_valid suppressed (exception_o should be 0 now)
+            // result_valid should be 0 (suppressed by page fault)
             if (result_valid !== 1'b0) begin
                 if (pass) $display("[%0d] FAIL: GETILEN page fault (addr=0xF000)", test_num);
                 $display("       result_valid_o: expected 0 (suppressed by page fault), got %b",

@@ -56,6 +56,8 @@ module misc_getilen #(
     logic [ADDR_WIDTH-1:0]      addr_q;             // Registered memory address
     logic [DATA_WIDTH-1:0]      result_q;           // Registered result
     logic                       page_fault_q;       // Latched page-fault flag
+    logic                       exception_q;        // Registered exception flag
+    logic [ADDR_WIDTH-1:0]      exception_addr_q;   // Registered exception address
 
     // -------------------------------------------------------------------------
     // GETILEN instruction detection
@@ -80,10 +82,12 @@ module misc_getilen #(
     // -------------------------------------------------------------------------
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
-            state_q       <= ST_IDLE;
-            addr_q        <= {ADDR_WIDTH{1'b0}};
-            result_q      <= {DATA_WIDTH{1'b0}};
-            page_fault_q  <= 1'b0;
+            state_q          <= ST_IDLE;
+            addr_q           <= {ADDR_WIDTH{1'b0}};
+            result_q         <= {DATA_WIDTH{1'b0}};
+            page_fault_q     <= 1'b0;
+            exception_q      <= 1'b0;
+            exception_addr_q <= {ADDR_WIDTH{1'b0}};
         end else begin
             state_q  <= state_next;
             if (state_q == ST_IDLE && is_getilen) begin
@@ -93,9 +97,15 @@ module misc_getilen #(
             if (state_q == ST_WAIT_READ) begin
                 if (mem_page_fault_i) begin
                     page_fault_q <= 1'b1;
+                    exception_q  <= 1'b1;
+                    exception_addr_q <= addr_q;
                 end else if (mem_ready_i) begin
                     result_q <= decode_length(mem_rdata_i);
                 end
+            end
+            if (state_q == ST_IDLE && !is_getilen) begin
+                exception_q      <= 1'b0;
+                exception_addr_q <= {ADDR_WIDTH{1'b0}};
             end
         end
     end
@@ -139,13 +149,13 @@ module misc_getilen #(
     assign mem_read_o = (state_q == ST_READ_BYTE);
 
     // -------------------------------------------------------------------------
-    // Exception outputs
+    // Exception outputs (registered for clean timing)
     //
     // On page fault, assert exception_o. The exception address is always the
     // GETILEN operand address (target_addr_i), not any instruction address.
     // -------------------------------------------------------------------------
-    assign exception_o      = (state_q == ST_WAIT_READ) && mem_page_fault_i;
-    assign exception_addr_o = addr_q;
+    assign exception_o      = exception_q;
+    assign exception_addr_o = exception_addr_q;
 
     // -------------------------------------------------------------------------
     // Result outputs
