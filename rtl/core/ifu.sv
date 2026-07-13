@@ -193,9 +193,11 @@ module misc_ifu #(
                         if (mem_page_fault_i) begin
                             // Page fault on first halfword — report with
                             // the original instruction start address.
+                            // Instruction length is unknown, default to 2 bytes.
                             exception_o        <= 1'b1;
                             exception_cause_o  <= EXC_PAGE_FAULT;
                             exception_addr_o   <= instr_start_addr;
+                            instr_len_o        <= LEN_2B;
                             fetch_req_o        <= 1'b0;
                             state              <= IDLE;
 
@@ -235,6 +237,7 @@ module misc_ifu #(
                                     exception_o        <= 1'b1;
                                     exception_cause_o  <= EXC_ATOMIC_CROSS_PAGE;
                                     exception_addr_o   <= instr_start_addr;
+                                    instr_len_o        <= LEN_4B;
                                     fetch_req_o        <= 1'b0;
                                     state              <= IDLE;
                                 end else begin
@@ -272,6 +275,7 @@ module misc_ifu #(
                             exception_o        <= 1'b1;
                             exception_cause_o  <= EXC_PAGE_FAULT;
                             exception_addr_o   <= instr_start_addr;
+                            instr_len_o        <= {1'b0, instr_len_enc};
                             fetch_req_o        <= 1'b0;
                             state              <= IDLE;
 

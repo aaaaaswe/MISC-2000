@@ -5,7 +5,7 @@
 // Tests: x0 hardwired-zero, write/read, sub-word writes,
 // forwarding, reset, and full 32-register sweep.
 
-`include "../rtl/core/regfile.sv"
+
 
 `timescale 1ns / 1ps
 

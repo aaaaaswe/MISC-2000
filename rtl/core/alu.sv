@@ -113,10 +113,28 @@ module misc_alu (
     // the sign bit is the MSB of the *active* data width, not necessarily
     // bit 63.  This is used for OP_SAR, OP_MIN, OP_MAX, OP_NEG, OP_ABS.
     function automatic logic [63:0] sext_active(logic [63:0] val);
+        logic [63:0] result;
         logic sign_bit;
-        sign_bit = val[msb_pos];
-        sext_active = val & data_mask;
-        sext_active[63:msb_pos] = {(64 - msb_pos){sign_bit}};
+        result = val & data_mask;
+        unique case (data_width_i)
+            3'd0: begin
+                sign_bit = val[7];
+                result[63:7] = {57{sign_bit}};
+            end
+            3'd1: begin
+                sign_bit = val[15];
+                result[63:15] = {49{sign_bit}};
+            end
+            3'd2: begin
+                sign_bit = val[31];
+                result[63:31] = {33{sign_bit}};
+            end
+            default: begin
+                sign_bit = val[63];
+                // Already 64-bit, no extension needed
+            end
+        endcase
+        sext_active = result;
     endfunction
 
     // -------------------------------------------------------------------------
@@ -150,6 +168,26 @@ module misc_alu (
     assign add_ext = {1'b0, op_a_m} + {1'b0, op_b_m};
     assign sub_ext = {1'b0, op_a_m} - {1'b0, op_b_m};
 
+    // Per-width carry/borrow extraction
+    logic add_carry;
+    logic sub_borrow;
+    always @(*) begin
+        case (data_width_i)
+            3'd0:    add_carry = add_ext[8];
+            3'd1:    add_carry = add_ext[16];
+            3'd2:    add_carry = add_ext[32];
+            default: add_carry = add_ext[64];
+        endcase
+    end
+    always @(*) begin
+        case (data_width_i)
+            3'd0:    sub_borrow = sub_ext[8];
+            3'd1:    sub_borrow = sub_ext[16];
+            3'd2:    sub_borrow = sub_ext[32];
+            default: sub_borrow = sub_ext[64];
+        endcase
+    end
+
     // -------------------------------------------------------------------------
     // Arithmetic helpers
     // -------------------------------------------------------------------------
@@ -176,7 +214,7 @@ module misc_alu (
         for (i = msb_pos; i >= 0; i--) begin
             if (v[i]) begin
                 clz_func = 64'(msb_pos - i);
-                return;
+                i = -1;
             end
         end
     endfunction
@@ -189,7 +227,7 @@ module misc_alu (
         for (i = 0; i <= msb_pos; i++) begin
             if (v[i]) begin
                 ctz_func = 64'(i);
-                return;
+                i = msb_pos + 1;
             end
         end
     endfunction
@@ -216,7 +254,7 @@ module misc_alu (
         for (i = 0; i <= top_byte; i++) begin
             swapped[i*8 +: 8] = v[(top_byte - i) * 8 +: 8];
         end
-        return swapped;
+        bswap_func = swapped;
     endfunction
 
     function automatic logic [63:0] bitrev_func(input logic [63:0] val);
@@ -241,7 +279,7 @@ module misc_alu (
     //     output (masked_result), so it is fine if computation temporarily
     //     produces non-zero bits above msb_pos.
     // -------------------------------------------------------------------------
-    always_comb begin
+    always @(*) begin
         raw_result   = 64'd0;
         raw_overflow = 1'b0;
         raw_carry    = 1'b0;
@@ -250,7 +288,7 @@ module misc_alu (
             // ---- Arithmetic ----
             OP_ADD: begin
                 raw_result   = add_ext[63:0];
-                raw_carry    = add_ext[64];
+                raw_carry    = add_carry;
                 // Signed overflow: same-sign operands produce opposite-sign result.
                 raw_overflow = (op_a_m[msb_pos] == op_b_m[msb_pos]) &&
                                (raw_result[msb_pos] != op_a_m[msb_pos]);
@@ -258,7 +296,7 @@ module misc_alu (
 
             OP_SUB: begin
                 raw_result   = sub_ext[63:0];
-                raw_carry    = ~sub_ext[64];  // borrow flag (inverted carry)
+                raw_carry    = ~sub_borrow;  // borrow flag (inverted carry)
                 // Signed overflow: opposite-sign operands produce op_a's sign.
                 raw_overflow = (op_a_m[msb_pos] != op_b_m[msb_pos]) &&
                                (raw_result[msb_pos] != op_a_m[msb_pos]);
@@ -266,8 +304,13 @@ module misc_alu (
 
             OP_MUL: begin
                 raw_result = mul_full[63:0];
-                // Overflow: upper 64 bits of 128-bit product are non-zero.
-                raw_overflow = |mul_full[127:64];
+                // Overflow: upper bits of 128-bit product beyond active width are non-zero.
+                case (data_width_i)
+                    3'd0:    raw_overflow = (|mul_full[15:8]);
+                    3'd1:    raw_overflow = (|mul_full[31:16]);
+                    3'd2:    raw_overflow = (|mul_full[63:32]);
+                    default: raw_overflow = (|mul_full[127:64]);
+                endcase
             end
 
             OP_DIV: begin
@@ -360,7 +403,7 @@ module misc_alu (
             OP_CMP: begin
                 raw_result = 64'd0;
                 // Re-use subtract carry/borrow for flag generation.
-                raw_carry    = ~sub_ext[64];
+                raw_carry    = ~sub_borrow;
                 raw_overflow = (op_a_m[msb_pos] != op_b_m[msb_pos]) &&
                                (sub_ext[msb_pos] != op_a_m[msb_pos]);
             end
@@ -460,9 +503,36 @@ module misc_alu (
     assign zero_o = (cmp_result_masked == 64'd0);
 
     // negative flag: MSB of the result within the current data width
-    assign negative_o = (alu_op_i == OP_CMP) ? sub_ext[msb_pos] :
-                        (alu_op_i == OP_TEST) ? (op_a_m[msb_pos] & op_b_m[msb_pos]) :
-                        masked_result[msb_pos];
+    logic neg_bit;
+    always @(*) begin
+        case (data_width_i)
+            3'd0:    neg_bit = masked_result[7];
+            3'd1:    neg_bit = masked_result[15];
+            3'd2:    neg_bit = masked_result[31];
+            default: neg_bit = masked_result[63];
+        endcase
+    end
+    logic cmp_neg;
+    always @(*) begin
+        case (data_width_i)
+            3'd0:    cmp_neg = sub_ext[7];
+            3'd1:    cmp_neg = sub_ext[16];
+            3'd2:    cmp_neg = sub_ext[32];
+            default: cmp_neg = sub_ext[63];
+        endcase
+    end
+    logic test_neg;
+    always @(*) begin
+        case (data_width_i)
+            3'd0:    test_neg = op_a_m[7] & op_b_m[7];
+            3'd1:    test_neg = op_a_m[15] & op_b_m[15];
+            3'd2:    test_neg = op_a_m[31] & op_b_m[31];
+            default: test_neg = op_a_m[63] & op_b_m[63];
+        endcase
+    end
+    assign negative_o = (alu_op_i == OP_CMP) ? cmp_neg :
+                        (alu_op_i == OP_TEST) ? test_neg :
+                        neg_bit;
 
     // overflow flag
     assign overflow_o = raw_overflow;

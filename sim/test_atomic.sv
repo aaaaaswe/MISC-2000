@@ -490,10 +490,7 @@ module tb_atomic;
         // Issue LL.D at address 0x1000
         issue_instr(OP_LL_D, 64'h1000, 64'h0, 64'h0, 64'h0);
 
-        // Wait for memory read to complete
-        wait_mem_ready();
-
-        // Wait for result_valid
+        // Wait for operation to complete (result_valid pulses for one cycle in DONE state)
         wait_result_valid();
 
         // Verify result
@@ -530,15 +527,13 @@ module tb_atomic;
         mem_store(64'h2000, 64'h0);  // initial value (don't care)
         clear_captures();
         issue_instr(OP_LL_D, 64'h2000, 64'h0, 64'h0, 64'h0);
-        wait_mem_ready();
         wait_result_valid();
 
         // Now execute SC.D at address 0x2000 with store data
         clear_captures();
         issue_instr(OP_SC_D, 64'h2000, 64'h12345678_9ABCDEF0, 64'h0, 64'h0);
 
-        // Wait for SC to complete (memory write + result)
-        wait_mem_ready();
+        // Wait for SC to complete
         wait_result_valid();
 
         // Verify sc_exec_o pulsed
@@ -558,7 +553,6 @@ module tb_atomic;
 
         // Execute LL.D at address 0x3000
         issue_instr(OP_LL_D, 64'h3000, 64'h0, 64'h0, 64'h0);
-        wait_mem_ready();
         wait_result_valid();
 
         // Assert monitor_clear (simulating another core's write)
@@ -569,7 +563,6 @@ module tb_atomic;
 
         // Execute SC.D at address 0x3000
         issue_instr(OP_SC_D, 64'h3000, 64'hDEADDEAD_DEADDEAD, 64'h0, 64'h0);
-        wait_mem_ready();
         wait_result_valid();
 
         // Verify result = 1 (failure)
@@ -591,10 +584,7 @@ module tb_atomic;
         // If no match, returns old value without modifying memory.
         issue_instr(OP_CAS_IMM, 64'h4000, 64'h11111111_22222222, 64'hCAFECAFE_CAFECAFE, 64'h0);
 
-        wait_mem_ready();  // CAS reads memory
-        // CAS may need another memory cycle for write
-        if (mem_read || mem_write)
-            wait_mem_ready();
+        // Wait for CAS to complete (read + possible write → DONE)
         wait_result_valid();
 
         // Verify CAS returns old value (which equals compare value)
@@ -614,9 +604,7 @@ module tb_atomic;
         // This should NOT write to memory
         issue_instr(OP_CAS_IMM, 64'h5000, 64'hAAAA_AAAA, 64'hBEEFBEEF_BEEFBEEF, 64'h0);
 
-        wait_mem_ready();
-        if (mem_read || mem_write)
-            wait_mem_ready();
+        // Wait for CAS to complete (read only → DONE, no match → no write)
         wait_result_valid();
 
         // Verify CAS returns old value (NOT equal to expected compare)
@@ -634,9 +622,8 @@ module tb_atomic;
         // The 4-byte instruction at 0x1FFE spans [0x1FFE, 0x1FFF, 0x2000, 0x2001]
         // which crosses the 4KB page boundary at 0x2000
         //
-        // exception_o is registered — it goes high one cycle after the
-        // cross-page instruction is presented.  result_valid is NOT asserted
-        // on cross-page faults.
+        // On cross-page, the state goes IDLE → DONE, so result_valid_o pulses
+        // and exception_o is high alongside result_valid_o.
         opcode      <= OP_CAS_IMM;
         rs1_data    <= 64'h0;
         rs2_data    <= 64'h0;
@@ -645,12 +632,12 @@ module tb_atomic;
         instr_valid <= 1'b1;
         @(posedge clk);   // present instruction
         instr_valid <= 1'b0;
-        @(posedge clk);   // exception_q captures on this edge
+
+        // Wait for result_valid pulse (DONE state)
+        wait_result_valid();
 
         check_bool("CAS cross-page: exception_o = 1", exception, 1'b1);
         check_val("CAS cross-page: exception_addr_o = 0x1FFE", exception_addr, 64'h1FFE);
-
-        @(posedge clk);   // exception clears (IDLE, !instr_valid)
 
         // =====================================================================
         // Test 8: FENCE instruction
@@ -681,11 +668,8 @@ module tb_atomic;
         // Issue LL.D
         issue_instr(OP_LL_D, 64'h6000, 64'h0, 64'h0, 64'h0);
 
-        // Wait for memory response (which will have page_fault)
-        wait_mem_ready();
-
-        // Wait for registered exception (one extra cycle after mem_ready)
-        repeat (2) @(posedge clk);
+        // Wait for result_valid pulse (DONE state) — exception_o is valid here
+        wait_result_valid();
 
         check_bool("LL.D page fault: exception_o = 1", exception, 1'b1);
         check_val("LL.D page fault: exception_addr_o = 0x6000", exception_addr, 64'h6000);
@@ -698,7 +682,6 @@ module tb_atomic;
         // First execute LL.D at address 0x7000 (success)
         mem_store(64'h7000, 64'h0);
         issue_instr(OP_LL_D, 64'h7000, 64'h0, 64'h0, 64'h0);
-        wait_mem_ready();
         wait_result_valid();
 
         // Pulse mem_fault_inject for one cycle to inject a page fault on SC write
@@ -709,10 +692,8 @@ module tb_atomic;
         // Execute SC.D at address 0x7000
         issue_instr(OP_SC_D, 64'h7000, 64'hFEEDFEED_FEEDFEED, 64'h0, 64'h0);
 
-        wait_mem_ready();
-
-        // Wait for registered exception (one extra cycle after mem_ready)
-        repeat (2) @(posedge clk);
+        // Wait for result_valid pulse (DONE state) — exception_o is valid here
+        wait_result_valid();
 
         check_bool("SC.D page fault: exception_o = 1", exception, 1'b1);
         check_val("SC.D page fault: exception_addr_o = 0x7000", exception_addr, 64'h7000);
