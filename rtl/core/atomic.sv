@@ -202,7 +202,7 @@ module misc_atomic #(
         // Default outputs
         state_d           = state_q;
         mem_addr_o        = addr_q;
-        mem_wdata_o       = wdata_q;
+        mem_wdata_o       = is_cas_q ? cas_new_val_q : wdata_q;
         mem_read_o        = 1'b0;
         mem_write_o       = 1'b0;
         ll_exec_o         = 1'b0;
@@ -256,7 +256,7 @@ module misc_atomic #(
                             state_d   = STATE_DONE;
                         end else if (is_cas_q) begin
                             if (mem_rdata_i == wdata_q) begin
-                                mem_wdata_o = wdata_q;
+                                mem_wdata_o = cas_new_val_q;
                                 mem_write_o = 1'b1;
                                 state_d     = STATE_WRITE;
                             end else begin

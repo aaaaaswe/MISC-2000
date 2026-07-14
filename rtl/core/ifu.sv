@@ -233,7 +233,9 @@ module misc_ifu #(
                                   (mem_rdata_i[10:0] <= 11'h148)))) begin
 
                                 // Check cross-page: (start_addr[11:0] + 4) > 4096
-                                if ((instr_start_addr[11:0] + 13'd4) >= PAGE_SIZE) begin
+                                // A 4-byte instruction at offset 0xFFC occupies bytes
+                                // 0xFFC..0xFFF — still within the same 4 KB page.
+                                if ((instr_start_addr[11:0] + 13'd4) > PAGE_SIZE) begin
                                     exception_o        <= 1'b1;
                                     exception_cause_o  <= EXC_ATOMIC_CROSS_PAGE;
                                     exception_addr_o   <= instr_start_addr;
