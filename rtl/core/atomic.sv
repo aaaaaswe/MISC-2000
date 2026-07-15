@@ -53,9 +53,7 @@ module misc_atomic #(
     output logic                         fence_exec_o
 );
 
-    // =========================================================================
-    // Opcode definitions
-    // =========================================================================
+    // ---- Opcode definitions ----
     localparam logic [10:0] OP_LL_D      = 11'h040;
     localparam logic [10:0] OP_SC_D      = 11'h041;
     localparam logic [10:0] OP_CAS_IMM   = 11'h144;
@@ -65,9 +63,7 @@ module misc_atomic #(
     localparam logic [10:0] OP_CAS_STK   = 11'h148;
     localparam logic [10:0] OP_FENCE     = 11'h15E;
 
-    // =========================================================================
-    // State machine definitions
-    // =========================================================================
+    // ---- State machine definitions ----
     typedef enum logic [2:0] {
         STATE_IDLE          = 3'd0,
         STATE_READ          = 3'd1,
@@ -78,9 +74,7 @@ module misc_atomic #(
 
     state_t state_q, state_d;
 
-    // =========================================================================
-    // Instruction type decoding
-    // =========================================================================
+    // ---- Instruction type decoding ----
     logic is_ll;
     logic is_sc;
     logic is_cas;
@@ -97,19 +91,13 @@ module misc_atomic #(
     assign is_fence = (opcode_i == OP_FENCE);
     assign is_atomic = is_ll || is_sc || is_cas || is_fence;
 
-    // =========================================================================
-    // Cross-page detection
-    //   All atomic instructions are 4-byte fixed-length.
-    //   Cross-page condition: (inst_addr_i[11:0] + 4) > 4095
-    //   Use 13-bit addition to avoid overflow
-    // =========================================================================
+    // Cross-page detection: 4-byte atomics must not cross 4 KB page boundary.
+    // 13-bit addition avoids overflow: ({1'b0, addr[11:0]} + 4) > 4096
     logic cross_page;
 
     assign cross_page = ({1'b0, inst_addr_i[11:0]} + 13'd4) > 13'h1000;
 
-    // =========================================================================
-    // Internal registers
-    // =========================================================================
+    // ---- Internal registers ----
     logic [DATA_WIDTH-1:0]   read_data_q;      // data read from memory (LL / CAS)
     logic [ADDR_WIDTH-1:0]   addr_q;           // latched memory address
     logic [DATA_WIDTH-1:0]   wdata_q;          // latched write data (SC)
@@ -122,9 +110,7 @@ module misc_atomic #(
     logic                    exception_q;      // latched exception flag
     logic [ADDR_WIDTH-1:0]   exception_addr_q; // latched exception address
 
-    // =========================================================================
-    // State machine — sequential
-    // =========================================================================
+    // ---- State machine (sequential) ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= STATE_IDLE;
@@ -195,9 +181,7 @@ module misc_atomic #(
         end
     end
 
-    // =========================================================================
-    // State machine — combinatorial next-state and outputs
-    // =========================================================================
+    // ---- State machine (combinatorial) ----
     always_comb begin
         // Default outputs
         state_d           = state_q;
@@ -218,9 +202,7 @@ module misc_atomic #(
         // ----- Main state machine -----------------------------------------
         unique case (state_q)
 
-            // ===============================================================
             // IDLE — wait for valid atomic instruction
-            // ===============================================================
             STATE_IDLE: begin
                 if (instr_valid_i && is_atomic) begin
                     if (cross_page) begin
@@ -238,9 +220,7 @@ module misc_atomic #(
                 end
             end
 
-            // ===============================================================
             // READ — issue memory read and wait for response
-            // ===============================================================
             STATE_READ: begin
                 busy_o     = 1'b1;
                 mem_read_o = 1'b1;
@@ -269,9 +249,7 @@ module misc_atomic #(
                 end
             end
 
-            // ===============================================================
             // CHECK_MONITOR — check if exclusive monitor is still valid (SC)
-            // ===============================================================
             STATE_CHECK_MONITOR: begin
                 busy_o    = 1'b1;
                 sc_exec_o = 1'b1;
@@ -285,9 +263,7 @@ module misc_atomic #(
                 end
             end
 
-            // ===============================================================
             // WRITE — issue memory write and wait for response
-            // ===============================================================
             STATE_WRITE: begin
                 busy_o      = 1'b1;
                 mem_write_o = 1'b1;
@@ -302,9 +278,7 @@ module misc_atomic #(
                 end
             end
 
-            // ===============================================================
             // DONE — output result valid for one cycle, then return to IDLE
-            // ===============================================================
             STATE_DONE: begin
                 state_d = STATE_IDLE;
             end
@@ -316,9 +290,7 @@ module misc_atomic #(
         endcase
     end
 
-    // =========================================================================
-    // Assertions (synthesis off) — simplified for broader tool compatibility
-    // =========================================================================
+    // ---- Assertions (synthesis off) ----
     // synthesis translate_off
     `ifndef SYNTHESIS
     // Check that we don't drive read and write simultaneously

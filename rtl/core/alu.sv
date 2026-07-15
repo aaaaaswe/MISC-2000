@@ -15,9 +15,7 @@ module misc_alu (
     output logic        carry_o
 );
 
-    // -------------------------------------------------------------------------
-    // Operation encoding (one-hot / direct mapping for readability)
-    // -------------------------------------------------------------------------
+    // ---- Operation encoding ----
     localparam logic [5:0] OP_ADD    = 6'h00;
     localparam logic [5:0] OP_SUB    = 6'h01;
     localparam logic [5:0] OP_MUL    = 6'h02;
@@ -52,17 +50,10 @@ module misc_alu (
     localparam logic [5:0] OP_ZEXT_B = 6'h1F;
     localparam logic [5:0] OP_ZEXT_W = 6'h20;
 
-    // -------------------------------------------------------------------------
-    // Data width helpers
-    // data_width_i:  0 ->  8-bit (B), 1 -> 16-bit (W),
-    //                2 -> 32-bit (D), 3 -> 64-bit (Q)
-    //
-    // The ALU always operates on a 64-bit datapath, but when the active data
-    // width is narrower than 64 bits, the operands must be zero-extended into
-    // that width (sign-extended for the sign bit of signed ops).  Otherwise
-    // garbage in the upper bits (e.g. from an 8-bit load that left 56 bits
-    // untouched) leaks into MUL / DIV / MOD / shifts / bit-count results.
-    // -------------------------------------------------------------------------
+    // ---- Data width helpers ----
+    // data_width_i: 0 -> 8-bit (B), 1 -> 16-bit (W), 2 -> 32-bit (D), 3 -> 64-bit (Q)
+    // Operands are zero-masked to the active width so garbage above MSB
+    // cannot corrupt MUL/DIV/MOD/shifts/bit-count results.
     logic [63:0] data_mask;        // bitmask for active data width
     logic [ 5:0] msb_pos;          // index of the MSB for the active data width
     logic [ 5:0] shift_amt;        // limited shift amount (0..msb_pos)
@@ -137,9 +128,7 @@ module misc_alu (
         sext_active = result;
     endfunction
 
-    // -------------------------------------------------------------------------
-    // Internal signals
-    // -------------------------------------------------------------------------
+    // ---- Internal signals ----
     logic [63:0] raw_result;
     logic [63:0] masked_result;
     logic        raw_overflow;
@@ -188,12 +177,8 @@ module misc_alu (
         endcase
     end
 
-    // -------------------------------------------------------------------------
-    // Arithmetic helpers
-    // -------------------------------------------------------------------------
-    // Full 128-bit multiply.  Only the masked inputs participate, so for
-    // narrower widths the upper half of the product is guaranteed to be
-    // zero when there is no overflow.
+    // ---- Arithmetic helpers ----
+    // Full 128-bit multiply; only masked inputs participate.
     assign mul_full = op_a_m * op_b_m;
 
     // Division by zero protection — produce 0 on both outputs to avoid
@@ -201,11 +186,8 @@ module misc_alu (
     assign div_quotient  = (op_b_m == 64'd0) ? 64'd0 : (op_a_m / op_b_m);
     assign div_remainder = (op_b_m == 64'd0) ? 64'd0 : (op_a_m % op_b_m);
 
-    // -------------------------------------------------------------------------
-    // CLZ / CTZ / POPCNT / BSWAP / BITREV helper functions
-    //   All helpers operate on the zero-masked input so bits above the
-    //   active data width cannot corrupt the result.
-    // -------------------------------------------------------------------------
+    // ---- CLZ / CTZ / POPCNT / BSWAP / BITREV helpers ----
+    // All operate on zero-masked input so bits above active width cannot corrupt result.
     function automatic logic [63:0] clz_func(input logic [63:0] val);
         logic [63:0] v;
         integer i;
@@ -267,18 +249,10 @@ module misc_alu (
         end
     endfunction
 
-    // -------------------------------------------------------------------------
-    // Main ALU operation
-    //   Rules:
-    //   * Operands participating in arithmetic/logic/shift are op_a_m / op_b_m
-    //     (zero-masked to the active data width) unless otherwise noted.
-    //   * Signed operations use op_a_sext / op_b_sext (sign-extended from the
-    //     active data width into bit 63) so narrower-width signed values are
-    //     interpreted correctly.
-    //   * raw_result is always truncated to the active data width at the
-    //     output (masked_result), so it is fine if computation temporarily
-    //     produces non-zero bits above msb_pos.
-    // -------------------------------------------------------------------------
+    // ---- Main ALU operation ----
+    // Rules: arithmetic/logic/shift use op_a_m/op_b_m (zero-masked).
+    // Signed ops use op_a_sext/op_b_sext. raw_result is truncated to
+    // active data width at output (masked_result).
     always @(*) begin
         raw_result   = 64'd0;
         raw_overflow = 1'b0;
@@ -479,22 +453,15 @@ module misc_alu (
         endcase
     end
 
-    // -------------------------------------------------------------------------
-    // Data width masking
-    // -------------------------------------------------------------------------
+    // ---- Data width masking ----
     assign masked_result = raw_result & data_mask;
 
-    // -------------------------------------------------------------------------
-    // Output assignment
-    // -------------------------------------------------------------------------
+    // ---- Output assignment ----
     assign result_o = masked_result;
 
-    // -------------------------------------------------------------------------
-    // Flag generation
-    //   CMP and TEST have raw_result forced to 0 above, so we re-derive their
-    //   flags here from the actual comparison value.  All flags operate within
-    //   the active data width.
-    // -------------------------------------------------------------------------
+    // ---- Flag generation ----
+    // CMP/TEST have raw_result forced to 0 above; flags re-derived from
+    // actual comparison value. All flags operate within active data width.
     logic [63:0] cmp_result_masked;
     assign cmp_result_masked = (alu_op_i == OP_CMP) ? (sub_ext[63:0] & data_mask) :
                                (alu_op_i == OP_TEST) ? ((op_a_m & op_b_m) & data_mask) :

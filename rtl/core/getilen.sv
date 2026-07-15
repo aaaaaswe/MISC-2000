@@ -34,9 +34,7 @@ module misc_getilen #(
     output logic                         busy_o
 );
 
-    // -------------------------------------------------------------------------
-    // Local parameters
-    // -------------------------------------------------------------------------
+    // ---- Local parameters ----
     localparam logic [10:0] OPCODE_GETILEN = 11'h14F;
 
     // State encoding
@@ -47,9 +45,7 @@ module misc_getilen #(
         ST_DONE      = 2'b11
     } state_t;
 
-    // -------------------------------------------------------------------------
-    // Internal signals
-    // -------------------------------------------------------------------------
+    // ---- Internal signals ----
     state_t state_q, state_next;
 
     logic                       is_getilen;         // Decoded GETILEN instruction
@@ -60,14 +56,10 @@ module misc_getilen #(
     logic                       result_valid_q;     // Registered result valid
     logic                       page_fault_q;       // Latched page-fault flag
 
-    // -------------------------------------------------------------------------
-    // GETILEN instruction detection
-    // -------------------------------------------------------------------------
+    // ---- GETILEN instruction detection ----
     assign is_getilen = (opcode_i == OPCODE_GETILEN) && instr_valid_i;
 
-    // -------------------------------------------------------------------------
-    // Instruction length decoding helper
-    // -------------------------------------------------------------------------
+    // ---- Instruction length decoding helper ----
     function automatic logic [DATA_WIDTH-1:0] decode_length(input logic [7:0] byte_val);
         unique case (byte_val[7:6])
             2'b00:   decode_length = {{(DATA_WIDTH-2){1'b0}}, 2'd2};
@@ -78,9 +70,7 @@ module misc_getilen #(
         endcase
     endfunction
 
-    // -------------------------------------------------------------------------
-    // State machine: sequential logic (registers)
-    // -------------------------------------------------------------------------
+    // ---- State machine (sequential) ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= ST_IDLE;
@@ -116,9 +106,7 @@ module misc_getilen #(
         end
     end
 
-    // -------------------------------------------------------------------------
-    // State machine: next-state logic and outputs (combinational)
-    // -------------------------------------------------------------------------
+    // ---- State machine (combinational) ----
     always_comb begin
         state_next = state_q;
         unique case (state_q)
@@ -146,32 +134,19 @@ module misc_getilen #(
         endcase
     end
 
-    // -------------------------------------------------------------------------
-    // Memory interface outputs
-    //   Address is registered to avoid glitches; read enable is active during
-    //   the READ_BYTE state (one-cycle request pulse).
-    // -------------------------------------------------------------------------
+    // Memory interface: address is registered; read enable is one-cycle pulse in READ_BYTE.
     assign mem_addr_o = addr_q;
     assign mem_read_o = (state_q == ST_READ_BYTE);
 
-    // -------------------------------------------------------------------------
-    // Exception outputs (registered for clean timing)
-    //
-    // On page fault, assert exception_o. The exception address is always the
-    // GETILEN operand address (target_addr_i), not any instruction address.
-    // -------------------------------------------------------------------------
+    // Exception outputs (registered). On page fault, exception_addr = operand address.
     assign exception_o      = exception_q;
     assign exception_addr_o = exception_addr_q;
 
-    // -------------------------------------------------------------------------
-    // Result outputs
-    // -------------------------------------------------------------------------
+    // Result outputs (registered)
     assign result_o       = result_q;
     assign result_valid_o = result_valid_q;
 
-    // -------------------------------------------------------------------------
     // Busy output
-    // -------------------------------------------------------------------------
     assign busy_o = (state_q != ST_IDLE);
 
 endmodule

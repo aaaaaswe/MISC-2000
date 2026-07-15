@@ -44,9 +44,7 @@ module misc_ifu #(
     output logic [ADDR_WIDTH-1:0]   next_pc_o
 );
 
-    //=========================================================================
-    // Local parameters
-    //=========================================================================
+    // ---- Local parameters ----
     localparam int PAGE_SHIFT  = 12;                // 4 KB page
     localparam int PAGE_SIZE   = 13'h1000;
     localparam int PAGE_MASK   = 12'hFFF;
@@ -62,9 +60,7 @@ module misc_ifu #(
     localparam logic [2:0] LEN_6B = 3'd2;
     localparam logic [2:0] LEN_8B = 3'd3;
 
-    //=========================================================================
-    // State machine definition
-    //=========================================================================
+    // ---- State machine definition ----
     typedef enum logic [1:0] {
         IDLE            = 2'b00,
         FETCH_FIRST     = 2'b01,
@@ -74,9 +70,7 @@ module misc_ifu #(
 
     state_t state;
 
-    //=========================================================================
-    // Internal registers
-    //=========================================================================
+    // ---- Internal registers ----
 
     // Current fetch address driven to memory
     logic [ADDR_WIDTH-1:0] fetch_addr_reg;
@@ -98,22 +92,16 @@ module misc_ifu #(
     // Total bytes needed for this instruction (2, 4, 6, or 8)
     logic [3:0] total_bytes_needed;
 
-    //=========================================================================
-    // Combinational helpers
-    //=========================================================================
+    // ---- Combinational helpers ----
 
     // True while a memory read request is outstanding
     logic fetching_active;
     assign fetching_active = (state == FETCH_FIRST) || (state == FETCH_REMAINING);
 
-    //=========================================================================
-    // State machine + registers (single-process, synthesizable)
-    //=========================================================================
+    // ---- State machine + registers (single-process) ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
-            // ------------------------------------------------------------
             // Asynchronous active-low reset
-            // ------------------------------------------------------------
             state            <= IDLE;
             fetch_addr_reg   <= '0;
             instr_start_addr <= '0;
@@ -133,10 +121,8 @@ module misc_ifu #(
             exception_addr_o   <= '0;
 
         end else if (flush_i || branch_taken_i) begin
-            // ------------------------------------------------------------
-            // Pipeline flush or taken branch — discard current fetch,
+            // Pipeline flush / taken branch — discard current fetch,
             // redirect to branch target if branch_taken, else return to IDLE.
-            // ------------------------------------------------------------
             state            <= IDLE;
             fetch_addr_reg   <= branch_taken_i ? branch_target_i : '0;
             instr_start_addr <= branch_taken_i ? branch_target_i : '0;
@@ -150,19 +136,13 @@ module misc_ifu #(
             exception_o        <= 1'b0;
 
         end else begin
-            // ------------------------------------------------------------
             // Default: de-assert single-cycle pulses
-            // ------------------------------------------------------------
             exception_o <= 1'b0;
 
-            // ------------------------------------------------------------
             // State-specific behaviour
-            // ------------------------------------------------------------
             unique case (state)
 
-                //=================================================================
                 // IDLE — wait for a fetch request (stall prevents new fetches)
-                //=================================================================
                 IDLE: begin
                     instr_valid_o <= 1'b0;
 
@@ -181,9 +161,7 @@ module misc_ifu #(
                     end
                 end
 
-                //=================================================================
                 // FETCH_FIRST — wait for the first 2 bytes from memory
-                //=================================================================
                 FETCH_FIRST: begin
                     fetch_req_o   <= 1'b1;     // request still active
                     instr_valid_o <= 1'b0;
@@ -259,9 +237,7 @@ module misc_ifu #(
                     end
                 end
 
-                //=================================================================
                 // FETCH_REMAINING — fetch the remaining bytes
-                //=================================================================
                 FETCH_REMAINING: begin
                     fetch_req_o   <= 1'b1;     // request still active
                     instr_valid_o <= 1'b0;
@@ -303,9 +279,7 @@ module misc_ifu #(
                     end
                 end
 
-                //=================================================================
                 // DONE — present the complete instruction to the decode stage
-                //=================================================================
                 DONE: begin
                     fetch_req_o   <= 1'b0;
                     instr_valid_o <= 1'b1;
@@ -328,9 +302,7 @@ module misc_ifu #(
                     // else: stalled — hold outputs, stay in DONE
                 end
 
-                //=================================================================
                 // Safety fallback
-                //=================================================================
                 default: begin
                     state <= IDLE;
                 end
@@ -339,9 +311,7 @@ module misc_ifu #(
         end
     end
 
-    //=========================================================================
-    // Continuous output assignments (fetch address is a registered copy)
-    //=========================================================================
+    // ---- Continuous output assignments (fetch address is registered) ----
     assign fetch_addr_o = fetch_addr_reg;
 
 endmodule

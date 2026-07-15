@@ -38,9 +38,7 @@ module misc_csr #(
     input  logic                         monitor_clear_i
 );
 
-    // -------------------------------------------------------------------------
-    // CSR address constants
-    // -------------------------------------------------------------------------
+    // ---- CSR address constants ----
     localparam logic [11:0] CSR_EPC           = 12'h300;
     localparam logic [11:0] CSR_ILLEN         = 12'h301;
     localparam logic [11:0] CSR_ECAUSE        = 12'h302;
@@ -49,9 +47,7 @@ module misc_csr #(
     localparam logic [11:0] CSR_MONITOR_ADDR  = 12'h340;
     localparam logic [11:0] CSR_MONITOR_VALID = 12'h341;
 
-    // -------------------------------------------------------------------------
-    // Internal registers
-    // -------------------------------------------------------------------------
+    // ---- Internal registers ----
     logic [ADDR_WIDTH-1:0] mepc;           // CSR_EPC
     logic [15:0]           millen;         // CSR_ILLEN (actual byte count: 2/4/6/8)
     logic [3:0]            mecause;        // CSR_ECAUSE
@@ -60,10 +56,7 @@ module misc_csr #(
     logic [ADDR_WIDTH-1:0] monitor_addr;   // CSR_MONITOR_ADDR
     logic                  monitor_valid;  // CSR_MONITOR_VALID
 
-    // -------------------------------------------------------------------------
-    // ILLEN decode: convert encoded instruction length to actual byte count
-    //   0 -> 2 bytes, 1 -> 4 bytes, 2 -> 6 bytes, 3 -> 8 bytes
-    // -------------------------------------------------------------------------
+    // ILLEN decode: encoded 0->2B, 1->4B, 2->6B, 3->8B
     function automatic logic [15:0] decode_ilen(input logic [2:0] encoded);
         unique case (encoded)
             3'd0: decode_ilen = 16'd2;
@@ -74,19 +67,13 @@ module misc_csr #(
         endcase
     endfunction
 
-    // -------------------------------------------------------------------------
-    // ERET target address: mepc + instruction length of the faulting instruction
-    // -------------------------------------------------------------------------
+    // ERET target: mepc + instruction length of faulting instruction
     assign eret_target_o = mepc + { {(ADDR_WIDTH-16){1'b0}}, millen };
 
-    // -------------------------------------------------------------------------
-    // SC success: succeeds only when monitor_valid is still asserted
-    // -------------------------------------------------------------------------
+    // SC success: only when monitor_valid is still asserted
     assign sc_success_o = sc_exec_i & monitor_valid;
 
-    // -------------------------------------------------------------------------
-    // CSR read multiplexer
-    // -------------------------------------------------------------------------
+    // ---- CSR read multiplexer ----
     always_comb begin
         csr_rdata_o = {DATA_WIDTH{1'b0}};
         if (csr_ren_i) begin
@@ -103,9 +90,7 @@ module misc_csr #(
         end
     end
 
-    // -------------------------------------------------------------------------
-    // Synchronous register update and reset
-    // -------------------------------------------------------------------------
+    // ---- Synchronous register update and reset ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             mepc          <= {ADDR_WIDTH{1'b0}};
@@ -116,19 +101,14 @@ module misc_csr #(
             monitor_addr  <= {ADDR_WIDTH{1'b0}};
             monitor_valid <= 1'b0;
         end else begin
-            // ---------------------------------------------------------------
-            // Exception entry: capture faulting PC, decode instruction length,
-            // and record exception cause.
-            // ---------------------------------------------------------------
+            // Exception entry: capture PC, decode ILEN, record cause.
             if (exception_taken_i) begin
                 mepc    <= exception_pc_i;
                 millen  <= decode_ilen(exception_ilen_i);
                 mecause <= exception_cause_i;
             end
 
-            // ---------------------------------------------------------------
             // CSR write interface
-            // ---------------------------------------------------------------
             if (csr_wen_i) begin
                 unique case (csr_addr_i)
                     CSR_EPC:           mepc    <= csr_wdata_i[ADDR_WIDTH-1:0];
@@ -142,24 +122,18 @@ module misc_csr #(
                 endcase
             end
 
-            // ---------------------------------------------------------------
-            // LL instruction: capture 64-byte aligned address and set monitor
-            // ---------------------------------------------------------------
+            // LL: capture 64-byte aligned address and set monitor
             if (ll_exec_i) begin
                 monitor_addr  <= {ll_addr_i[ADDR_WIDTH-1:6], 6'b0};
                 monitor_valid <= 1'b1;
             end
 
-            // ---------------------------------------------------------------
-            // SC instruction: clear monitor unconditionally after execution
-            // ---------------------------------------------------------------
+            // SC: clear monitor unconditionally after execution
             if (sc_exec_i) begin
                 monitor_valid <= 1'b0;
             end
 
-            // ---------------------------------------------------------------
             // External monitor clear (interrupts, other-core writes, etc.)
-            // ---------------------------------------------------------------
             if (monitor_clear_i) begin
                 monitor_valid <= 1'b0;
             end

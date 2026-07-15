@@ -40,12 +40,9 @@ module misc_regfile #(
     input  logic [2:0]                     rd_width_i
 );
 
-    // =====================================================================
-    // Local parameters / helpers
-    //   Width of the "upper" (unchanged) part of the register during a
-    //   sub-word write.  Clamped at 0 so that a narrow DATA_WIDTH does not
-    //   produce a negative (and thus invalid) Verilog part-select width.
-    // =====================================================================
+    // ---- Local parameters / helpers ----
+    // Upper width of register during sub-word write, clamped at 0 to
+    // avoid negative (invalid) Verilog part-select width.
     localparam int UPPER_BYTE = (DATA_WIDTH > 8)  ? (DATA_WIDTH - 8)  : 0;
     localparam int UPPER_HALF = (DATA_WIDTH > 16) ? (DATA_WIDTH - 16) : 0;
     localparam int UPPER_WORD = (DATA_WIDTH > 32) ? (DATA_WIDTH - 32) : 0;
@@ -78,23 +75,17 @@ module misc_regfile #(
         return result;
     endfunction
 
-    // =====================================================================
-    // Register array
-    // =====================================================================
+    // ---- Register array ----
     logic [DATA_WIDTH-1:0] regs [NUM_REGS-1:0];
 
-    // =====================================================================
-    // Combinational reads (x0 hardwired to zero)
-    // =====================================================================
+    // ---- Combinational reads (x0 hardwired to zero) ----
     wire [DATA_WIDTH-1:0] rf_rs1_raw = regs[rs1_addr_i];
     wire [DATA_WIDTH-1:0] rf_rs2_raw = regs[rs2_addr_i];
 
     wire [DATA_WIDTH-1:0] rf_rs1 = (rs1_addr_i == '0) ? '0 : rf_rs1_raw;
     wire [DATA_WIDTH-1:0] rf_rs2 = (rs2_addr_i == '0) ? '0 : rf_rs2_raw;
 
-    // =====================================================================
-    // Write-through forwarding
-    // =====================================================================
+    // ---- Write-through forwarding ----
     wire [DATA_WIDTH-1:0] rf_rd_raw = regs[rd_addr_i];
     logic [DATA_WIDTH-1:0] fwd_data;
 
@@ -112,9 +103,7 @@ module misc_regfile #(
                         ? fwd_data
                         : rf_rs2;
 
-    // =====================================================================
-    // Synchronous write with asynchronous active-low reset
-    // =====================================================================
+    // ---- Synchronous write with async active-low reset ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             // Clear all registers to zero on reset.
