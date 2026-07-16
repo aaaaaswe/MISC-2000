@@ -1,8 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Atomic Instruction Support — LL.D, SC.D, CAS.D (opcodes 0x040, 0x041, 0x144–0x148), FENCE (0x15E).
+// MISC-2000 Atomic Instructions — LL.D, SC.D, CAS.D, FENCE.
 // State: IDLE → READ → CHECK_MONITOR → WRITE → DONE.
-// LL sets 64-byte aligned monitor; SC succeeds only if monitor_valid; CAS compares and swaps.
 
 module misc_atomic #(
     parameter int DATA_WIDTH = 64,
@@ -91,10 +90,8 @@ module misc_atomic #(
     assign is_fence = (opcode_i == OP_FENCE);
     assign is_atomic = is_ll || is_sc || is_cas || is_fence;
 
-    // Cross-page detection: 4-byte atomics must not cross 4 KB page boundary.
-    // 13-bit addition avoids overflow: ({1'b0, addr[11:0]} + 4) > 4096
+    // Cross-page detection: 4-byte atomics must not cross 4 KB boundary
     logic cross_page;
-
     assign cross_page = ({1'b0, inst_addr_i[11:0]} + 13'd4) > 13'h1000;
 
     // ---- Internal registers ----
@@ -144,7 +141,6 @@ module misc_atomic #(
                 read_data_q <= mem_rdata_i;
             end
 
-            // Latch exception and result when entering DONE state
             if (state_d == STATE_DONE) begin
                 if (state_q == STATE_IDLE && cross_page) begin
                     exception_q      <= 1'b1;
@@ -163,7 +159,6 @@ module misc_atomic #(
                 exception_addr_q <= {ADDR_WIDTH{1'b0}};
             end
 
-            // Latch result when entering DONE state
             if (state_d == STATE_DONE) begin
                 if (state_q == STATE_READ && is_ll_q && mem_ready_i && !mem_page_fault_i) begin
                     result_q <= mem_rdata_i;
@@ -202,7 +197,6 @@ module misc_atomic #(
         // ----- Main state machine -----------------------------------------
         unique case (state_q)
 
-            // IDLE — wait for valid atomic instruction
             STATE_IDLE: begin
                 if (instr_valid_i && is_atomic) begin
                     if (cross_page) begin
@@ -220,7 +214,6 @@ module misc_atomic #(
                 end
             end
 
-            // READ — issue memory read and wait for response
             STATE_READ: begin
                 busy_o     = 1'b1;
                 mem_read_o = 1'b1;
@@ -249,7 +242,6 @@ module misc_atomic #(
                 end
             end
 
-            // CHECK_MONITOR — check if exclusive monitor is still valid (SC)
             STATE_CHECK_MONITOR: begin
                 busy_o    = 1'b1;
                 sc_exec_o = 1'b1;
@@ -263,7 +255,6 @@ module misc_atomic #(
                 end
             end
 
-            // WRITE — issue memory write and wait for response
             STATE_WRITE: begin
                 busy_o      = 1'b1;
                 mem_write_o = 1'b1;
@@ -278,7 +269,6 @@ module misc_atomic #(
                 end
             end
 
-            // DONE — output result valid for one cycle, then return to IDLE
             STATE_DONE: begin
                 state_d = STATE_IDLE;
             end

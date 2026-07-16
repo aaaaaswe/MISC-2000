@@ -1,20 +1,8 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-
-// Register File for the MISC-2000 processor.
-// - NUM_REGS general-purpose registers, each DATA_WIDTH bits wide.
-// - x0 (register 0) is hardwired to zero: reads return 0, writes are
-//   silently ignored.
-// - Dual combinational read ports (rs1, rs2).
-// - Single synchronous write port with sub-word write support controlled
-//   by rd_width_i:
-//       0 -> write low 8  bits (byte)
-//       1 -> write low 16 bits (half-word)
-//       2 -> write low 32 bits (word)
-//       3 -> write full DATA_WIDTH bits (quad-word)
-// - Write-through forwarding: when the write address matches a read
-//   address and rd_wen_i is high, the composed value is driven on the
-//   read port in the same cycle.
+// MISC-2000 Register File — NUM_REGS registers, DATA_WIDTH bits each.
+// x0 is hardwired to zero; dual combinational read ports; single sync write.
+// Write-through forwarding for same-cycle reads.
 
 module misc_regfile #(
     parameter int DATA_WIDTH = 64,
@@ -41,22 +29,17 @@ module misc_regfile #(
 );
 
     // ---- Local parameters / helpers ----
-    // Upper width of register during sub-word write, clamped at 0 to
-    // avoid negative (invalid) Verilog part-select width.
     localparam int UPPER_BYTE = (DATA_WIDTH > 8)  ? (DATA_WIDTH - 8)  : 0;
     localparam int UPPER_HALF = (DATA_WIDTH > 16) ? (DATA_WIDTH - 16) : 0;
     localparam int UPPER_WORD = (DATA_WIDTH > 32) ? (DATA_WIDTH - 32) : 0;
 
-    // Sub-word composer: returns the new value of a register after
-    // replacing the low N bits with the corresponding slice of write
-    // data.  The upper bits are preserved from `old_val`.
     function automatic logic [DATA_WIDTH-1:0] compose(
         input logic [DATA_WIDTH-1:0] old_val,
         input logic [DATA_WIDTH-1:0] wr_val,
         input logic [2:0]             width
     );
         logic [DATA_WIDTH-1:0] result;
-        result = old_val;                 // default: preserve all bits
+        result = old_val;
         unique case (width[1:0])
             2'd0: begin
                 result[7:0] = wr_val[7:0];
@@ -81,7 +64,6 @@ module misc_regfile #(
     // ---- Combinational reads (x0 hardwired to zero) ----
     wire [DATA_WIDTH-1:0] rf_rs1_raw = regs[rs1_addr_i];
     wire [DATA_WIDTH-1:0] rf_rs2_raw = regs[rs2_addr_i];
-
     wire [DATA_WIDTH-1:0] rf_rs1 = (rs1_addr_i == '0) ? '0 : rf_rs1_raw;
     wire [DATA_WIDTH-1:0] rf_rs2 = (rs2_addr_i == '0) ? '0 : rf_rs2_raw;
 
@@ -93,8 +75,6 @@ module misc_regfile #(
         fwd_data = compose(rf_rd_raw, rd_data_i, rd_width_i);
     end
 
-    // Forward to each read port.  x0 forwarding is suppressed because x0
-    // is always zero regardless of any attempted write.
     assign rs1_data_o = (rd_wen_i && (rd_addr_i != '0) && (rd_addr_i == rs1_addr_i))
                         ? fwd_data
                         : rf_rs1;
@@ -103,10 +83,8 @@ module misc_regfile #(
                         ? fwd_data
                         : rf_rs2;
 
-    // ---- Synchronous write with async active-low reset ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
-            // Clear all registers to zero on reset.
             for (int i = 0; i < NUM_REGS; i++) begin
                 regs[i] <= '0;
             end

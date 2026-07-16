@@ -1,7 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
 // MISC-2000 5-Stage Pipeline Controller — Fetch → Decode → Execute → Memory → Writeback.
-// Supports stall, flush (branch mispredict recovery), and branch target redirection.
+// Supports stall, flush, and branch target redirection.
 
 module misc_pipeline_ctrl #(
     parameter int DATA_WIDTH   = 64,
@@ -79,12 +79,11 @@ module misc_pipeline_ctrl #(
     localparam logic [1:0] STATE_STALLED = 2'd2;
     localparam logic [1:0] STATE_FLUSHING = 2'd3;
 
-    // ---- Pipeline registers: Fetch → Decode ----
+    // ---- Pipeline registers ----
     logic [ADDR_WIDTH-1:0]   fd_pc;
     logic [OPCODE_WIDTH-1:0] fd_opcode;
     logic                    fd_valid;
 
-    // ---- Pipeline registers: Decode → Execute ----
     logic [ADDR_WIDTH-1:0]   de_pc;
     logic [OPCODE_WIDTH-1:0] de_opcode;
     logic [DATA_WIDTH-1:0]   de_rs1_data;
@@ -94,7 +93,6 @@ module misc_pipeline_ctrl #(
     logic [4:0]              de_rd_addr;
     logic                    de_valid;
 
-    // ---- Pipeline registers: Execute → Memory ----
     logic [ADDR_WIDTH-1:0]   em_pc;
     logic [OPCODE_WIDTH-1:0] em_opcode;
     logic [DATA_WIDTH-1:0]   em_alu_result;
@@ -105,7 +103,6 @@ module misc_pipeline_ctrl #(
     logic                    em_mem_write;
     logic                    em_valid;
 
-    // ---- Pipeline registers: Memory → Writeback ----
     logic [ADDR_WIDTH-1:0]   mw_pc;
     logic [OPCODE_WIDTH-1:0] mw_opcode;
     logic [DATA_WIDTH-1:0]   mw_mem_rdata;
@@ -114,14 +111,13 @@ module misc_pipeline_ctrl #(
     logic                    mw_reg_write;
     logic                    mw_valid;
 
-    // ---- Next-state signals (combinational) ----
+    // ---- Next-state signals ----
     logic                    flush_active;
     logic                    stall_active;
-    logic                    advance_pipe;     // normal pipeline advance this cycle
+    logic                    advance_pipe;
     logic [1:0]              next_state;
 
-    // ---- Instruction decode helpers (combinational) ----
-    // Register fields are derived from opcode bits per MISC-2000 encoding.
+    // ---- Instruction decode helpers ----
     logic [4:0]  decode_rs1_addr;
     logic [4:0]  decode_rs2_addr;
     logic [4:0]  decode_rd_addr;
@@ -130,10 +126,7 @@ module misc_pipeline_ctrl #(
     logic        decode_mem_read;
     logic        decode_mem_write;
 
-    // Simplified opcode decode: ranges match misc_decoder so interpretations
-    // never disagree.  11-bit opcodes cannot reach 0x800+.
     always_comb begin
-        // Default: no operation
         decode_rs1_addr  = 5'd0;
         decode_rs2_addr  = 5'd0;
         decode_rd_addr   = 5'd0;
@@ -224,10 +217,8 @@ module misc_pipeline_ctrl #(
             next_state = STATE_RUNNING;
     end
 
-    // advance_pipe is asserted when the pipeline should shift normally
     assign advance_pipe = (next_state == STATE_RUNNING);
 
-    // ---- Pipeline state register ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i)
             pipeline_state_o <= STATE_IDLE;
@@ -235,17 +226,13 @@ module misc_pipeline_ctrl #(
             pipeline_state_o <= next_state;
     end
 
-    // ---- Stall outputs ----
     assign stall_fetch_o  = stall_active;
     assign stall_decode_o = stall_active;
 
-    // ---- Next PC computation ----
     assign next_pc_o = branch_taken_i ? branch_target_i : (pc_i + {{ADDR_WIDTH-3}{1'b0}, 3'd4});
 
-    // ---- Pipeline register update (sequential) ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
-            // Reset: clear all pipeline registers
             fd_pc         <= '0;
             fd_opcode     <= '0;
             fd_valid      <= 1'b0;
@@ -278,11 +265,9 @@ module misc_pipeline_ctrl #(
             mw_valid      <= 1'b0;
 
         end else if (flush_active) begin
-            // Flush: invalidate fetch/decode; execute/memory continue to drain.
             fd_valid <= 1'b0;
             de_valid <= 1'b0;
 
-            // Execute → Memory (shift even during flush to drain the pipe)
             em_pc         <= de_pc;
             em_opcode     <= de_opcode;
             em_alu_result <= alu_result_i;
@@ -293,7 +278,6 @@ module misc_pipeline_ctrl #(
             em_mem_write  <= decode_mem_write & de_valid;
             em_valid      <= de_valid;
 
-            // Memory → Writeback
             mw_pc         <= em_pc;
             mw_opcode     <= em_opcode;
             mw_mem_rdata  <= mem_rdata_i;
@@ -303,14 +287,6 @@ module misc_pipeline_ctrl #(
             mw_valid      <= em_valid;
 
         end else if (stall_active) begin
-            // Stall: freeze fetch/decode; execute/memory continue to run.
-            // Fetch → Decode: no update (frozen)
-            // (fd_* registers hold their values)
-
-            // Decode → Execute: no update (frozen)
-            // (de_* registers hold their values)
-
-            // Execute → Memory
             em_pc         <= de_pc;
             em_opcode     <= de_opcode;
             em_alu_result <= alu_result_i;
@@ -321,7 +297,6 @@ module misc_pipeline_ctrl #(
             em_mem_write  <= decode_mem_write & de_valid;
             em_valid      <= de_valid;
 
-            // Memory → Writeback
             mw_pc         <= em_pc;
             mw_opcode     <= em_opcode;
             mw_mem_rdata  <= mem_rdata_i;
@@ -331,14 +306,10 @@ module misc_pipeline_ctrl #(
             mw_valid      <= em_valid;
 
         end else begin
-            // Normal operation: shift all stages forward
-
-            // Fetch → Decode
             fd_pc     <= pc_i;
             fd_opcode <= opcode_i;
             fd_valid  <= 1'b1;
 
-            // Decode → Execute
             de_pc         <= fd_pc;
             de_opcode     <= fd_opcode;
             de_rs1_data   <= rs1_data_i;
@@ -348,7 +319,6 @@ module misc_pipeline_ctrl #(
             de_rd_addr    <= decode_rd_addr;
             de_valid      <= fd_valid;
 
-            // Execute → Memory
             em_pc         <= de_pc;
             em_opcode     <= de_opcode;
             em_alu_result <= alu_result_i;
@@ -359,7 +329,6 @@ module misc_pipeline_ctrl #(
             em_mem_write  <= decode_mem_write & de_valid;
             em_valid      <= de_valid;
 
-            // Memory → Writeback
             mw_pc         <= em_pc;
             mw_opcode     <= em_opcode;
             mw_mem_rdata  <= mem_rdata_i;
@@ -370,15 +339,10 @@ module misc_pipeline_ctrl #(
         end
     end
 
-    // ---- Combinational output assignments ----
-
-    // PC outputs (from internal pipeline registers)
     assign pc_fetch_o   = pc_i;
     assign pc_decode_o  = fd_pc;
     assign pc_execute_o = de_pc;
     assign pc_memory_o  = em_pc;
-
-    // Opcode outputs
     assign opcode_decode_o  = fd_opcode;
     assign opcode_execute_o = de_opcode;
     assign opcode_memory_o  = em_opcode;

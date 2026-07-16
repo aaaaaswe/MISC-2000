@@ -1,9 +1,8 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Control and Status Register (CSR) module — exception handling and LL/SC support.
+// MISC-2000 Control and Status Registers — exception handling and LL/SC support.
 // CSR_EPC (0x300), CSR_ILLEN (0x301), CSR_ECAUSE (0x302), CSR_ETVAL (0x303), CSR_ESTATUS (0x304).
 // LL/SC: CSR_MONITOR_ADDR (0x340), CSR_MONITOR_VALID (0x341).
-// ERET target: mepc + decoded_ilen; SC success requires monitor_valid asserted.
 
 module misc_csr #(
     parameter int DATA_WIDTH = 64,
@@ -49,7 +48,7 @@ module misc_csr #(
 
     // ---- Internal registers ----
     logic [ADDR_WIDTH-1:0] mepc;           // CSR_EPC
-    logic [15:0]           millen;         // CSR_ILLEN (actual byte count: 2/4/6/8)
+    logic [15:0]           millen;         // CSR_ILLEN (2/4/6/8 bytes)
     logic [3:0]            mecause;        // CSR_ECAUSE
     logic [ADDR_WIDTH-1:0] metval;         // CSR_ETVAL
     logic [DATA_WIDTH-1:0] mestatus;       // CSR_ESTATUS
@@ -67,10 +66,7 @@ module misc_csr #(
         endcase
     endfunction
 
-    // ERET target: mepc + instruction length of faulting instruction
     assign eret_target_o = mepc + { {(ADDR_WIDTH-16){1'b0}}, millen };
-
-    // SC success: only when monitor_valid is still asserted
     assign sc_success_o = sc_exec_i & monitor_valid;
 
     // ---- CSR read multiplexer ----
@@ -90,7 +86,6 @@ module misc_csr #(
         end
     end
 
-    // ---- Synchronous register update and reset ----
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             mepc          <= {ADDR_WIDTH{1'b0}};
@@ -101,14 +96,12 @@ module misc_csr #(
             monitor_addr  <= {ADDR_WIDTH{1'b0}};
             monitor_valid <= 1'b0;
         end else begin
-            // Exception entry: capture PC, decode ILEN, record cause.
             if (exception_taken_i) begin
                 mepc    <= exception_pc_i;
                 millen  <= decode_ilen(exception_ilen_i);
                 mecause <= exception_cause_i;
             end
 
-            // CSR write interface
             if (csr_wen_i) begin
                 unique case (csr_addr_i)
                     CSR_EPC:           mepc    <= csr_wdata_i[ADDR_WIDTH-1:0];
@@ -122,18 +115,15 @@ module misc_csr #(
                 endcase
             end
 
-            // LL: capture 64-byte aligned address and set monitor
             if (ll_exec_i) begin
                 monitor_addr  <= {ll_addr_i[ADDR_WIDTH-1:6], 6'b0};
                 monitor_valid <= 1'b1;
             end
 
-            // SC: clear monitor unconditionally after execution
             if (sc_exec_i) begin
                 monitor_valid <= 1'b0;
             end
 
-            // External monitor clear (interrupts, other-core writes, etc.)
             if (monitor_clear_i) begin
                 monitor_valid <= 1'b0;
             end
