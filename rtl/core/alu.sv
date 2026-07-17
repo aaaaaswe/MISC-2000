@@ -15,7 +15,7 @@ module misc_alu (
     output logic        carry_o
 );
 
-    // ---- Operation encoding ----
+    // Operation encoding
     localparam logic [5:0] OP_ADD    = 6'h00;
     localparam logic [5:0] OP_SUB    = 6'h01;
     localparam logic [5:0] OP_MUL    = 6'h02;
@@ -50,7 +50,7 @@ module misc_alu (
     localparam logic [5:0] OP_ZEXT_B = 6'h1F;
     localparam logic [5:0] OP_ZEXT_W = 6'h20;
 
-    // ---- Data width helpers ----
+    // Data width helpers
     // data_width_i: 0->8-bit, 1->16-bit, 2->32-bit, 3->64-bit
     logic [63:0] data_mask;        // bitmask for active data width
     logic [ 5:0] msb_pos;          // MSB index for active data width
@@ -107,7 +107,7 @@ module misc_alu (
         sext_active = result;
     endfunction
 
-    // ---- Internal signals ----
+    // Internal signals
     logic [63:0] raw_result;
     logic [63:0] masked_result;
     logic        raw_overflow;
@@ -153,14 +153,14 @@ module misc_alu (
         endcase
     end
 
-    // ---- Arithmetic helpers ----
+    // Arithmetic helpers
     assign mul_full = op_a_m * op_b_m;
 
     // Division by zero protection
     assign div_quotient  = (op_b_m == 64'd0) ? 64'd0 : (op_a_m / op_b_m);
     assign div_remainder = (op_b_m == 64'd0) ? 64'd0 : (op_a_m % op_b_m);
 
-    // ---- Bit manipulation helpers ----
+    // Bit manipulation helpers
     function automatic logic [63:0] clz_func(input logic [63:0] val);
         logic [63:0] v;
         integer i;
@@ -215,7 +215,7 @@ module misc_alu (
         end
     endfunction
 
-    // ---- Main ALU operation ----
+    // Main ALU operation
     always @(*) begin
         raw_result   = 64'd0;
         raw_overflow = 1'b0;
@@ -386,13 +386,13 @@ module misc_alu (
         endcase
     end
 
-    // ---- Data width masking ----
+    // Data width masking
     assign masked_result = raw_result & data_mask;
 
-    // ---- Output assignment ----
+    // Output assignment
     assign result_o = masked_result;
 
-    // ---- Flag generation ----
+    // Flag generation
     logic [63:0] cmp_result_masked;
     assign cmp_result_masked = (alu_op_i == OP_CMP) ? (sub_ext[63:0] & data_mask) :
                                (alu_op_i == OP_TEST) ? ((op_a_m & op_b_m) & data_mask) :

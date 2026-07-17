@@ -7,43 +7,43 @@ module misc_ifu #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 64
 ) (
-    // ---- Clock & Reset ------------------------------------------------
+    // Clock & Reset
     input  logic                     clk_i,
     input  logic                     rst_n_i,
 
-    // ---- Pipeline control ---------------------------------------------
+    // Pipeline control
     input  logic                     stall_i,
     input  logic                     flush_i,
 
-    // ---- Next-PC / Branch interface -----------------------------------
+    // Next-PC / Branch interface
     input  logic [ADDR_WIDTH-1:0]   pc_i,
     input  logic                     branch_taken_i,
     input  logic [ADDR_WIDTH-1:0]   branch_target_i,
 
-    // ---- Memory read interface (2-byte chunks) ------------------------
+    // Memory read interface (2-byte chunks)
     input  logic [15:0]             mem_rdata_i,
     input  logic                     mem_ready_i,
     input  logic                     mem_page_fault_i,
 
-    // ---- Fetch request to memory --------------------------------------
+    // Fetch request to memory
     output logic [ADDR_WIDTH-1:0]   fetch_addr_o,
     output logic                     fetch_req_o,
 
-    // ---- Instruction output to decode stage ---------------------------
+    // Instruction output to decode stage
     output logic [DATA_WIDTH-1:0]   instr_o,
     output logic                     instr_valid_o,
     output logic [ 2:0]             instr_len_o,
 
-    // ---- Exception reporting ------------------------------------------
+    // Exception reporting
     output logic                     exception_o,
     output logic [ 1:0]             exception_cause_o,
     output logic [ADDR_WIDTH-1:0]   exception_addr_o,
 
-    // ---- Next-PC output -----------------------------------------------
+    // Next-PC output
     output logic [ADDR_WIDTH-1:0]   next_pc_o
 );
 
-    // ---- Local parameters ----
+    // Local parameters
     localparam int PAGE_SHIFT  = 12;                // 4 KB page
     localparam int PAGE_SIZE   = 13'h1000;
     localparam int PAGE_MASK   = 12'hFFF;
@@ -59,7 +59,7 @@ module misc_ifu #(
     localparam logic [2:0] LEN_6B = 3'd2;
     localparam logic [2:0] LEN_8B = 3'd3;
 
-    // ---- State machine definition ----
+    // State machine definition
     typedef enum logic [1:0] {
         IDLE            = 2'b00,
         FETCH_FIRST     = 2'b01,
@@ -69,7 +69,7 @@ module misc_ifu #(
 
     state_t state;
 
-    // ---- Internal registers ----
+    // Internal registers
     logic [ADDR_WIDTH-1:0] fetch_addr_reg;
     logic [ADDR_WIDTH-1:0] instr_start_addr;
     logic [63:0] instr_buffer;
@@ -77,11 +77,11 @@ module misc_ifu #(
     logic [3:0] bytes_fetched;
     logic [3:0] total_bytes_needed;
 
-    // ---- Combinational helpers ----
+    // Combinational helpers
     logic fetching_active;
     assign fetching_active = (state == FETCH_FIRST) || (state == FETCH_REMAINING);
 
-    // ---- State machine + registers ----
+    // State machine + registers
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state            <= IDLE;
@@ -253,7 +253,7 @@ module misc_ifu #(
         end
     end
 
-    // ---- Continuous output assignments (fetch address is registered) ----
+    // Continuous output assignments
     assign fetch_addr_o = fetch_addr_reg;
 
 endmodule

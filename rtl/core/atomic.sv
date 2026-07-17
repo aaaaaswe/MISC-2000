@@ -7,11 +7,11 @@ module misc_atomic #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 64
 ) (
-    // ---- Clock & Reset ------------------------------------------------
+    // Clock & Reset
     input  logic                         clk_i,
     input  logic                         rst_n_i,
 
-    // ---- Instruction decode inputs ------------------------------------
+    // Instruction decode inputs
     input  logic [10:0]                  opcode_i,
     input  logic [4:0]                   rd_addr_i,
     input  logic [4:0]                   rs1_addr_i,
@@ -23,7 +23,7 @@ module misc_atomic #(
     input  logic [ADDR_WIDTH-1:0]        inst_addr_i,
     input  logic                         instr_valid_i,
 
-    // ---- Memory interface (to LSU) ------------------------------------
+    // Memory interface
     output logic [ADDR_WIDTH-1:0]        mem_addr_o,
     output logic [DATA_WIDTH-1:0]        mem_wdata_o,
     output logic                         mem_read_o,
@@ -32,27 +32,27 @@ module misc_atomic #(
     input  logic                         mem_ready_i,
     input  logic                         mem_page_fault_i,
 
-    // ---- Monitor interface (to CSR) -----------------------------------
+    // Monitor interface
     output logic                         ll_exec_o,
     output logic [ADDR_WIDTH-1:0]        ll_addr_o,
     output logic                         sc_exec_o,
     input  logic                         sc_success_i,
     input  logic                         monitor_clear_i,
 
-    // ---- Exception interface ------------------------------------------
+    // Exception interface
     output logic                         exception_o,
     output logic [ADDR_WIDTH-1:0]        exception_addr_o,
 
-    // ---- Result interface ---------------------------------------------
+    // Result interface
     output logic [DATA_WIDTH-1:0]        result_o,
     output logic                         result_valid_o,
     output logic                         busy_o,
 
-    // ---- FENCE interface ----------------------------------------------
+    // FENCE interface
     output logic                         fence_exec_o
 );
 
-    // ---- Opcode definitions ----
+    // Opcode definitions
     localparam logic [10:0] OP_LL_D      = 11'h040;
     localparam logic [10:0] OP_SC_D      = 11'h041;
     localparam logic [10:0] OP_CAS_IMM   = 11'h144;
@@ -62,7 +62,7 @@ module misc_atomic #(
     localparam logic [10:0] OP_CAS_STK   = 11'h148;
     localparam logic [10:0] OP_FENCE     = 11'h15E;
 
-    // ---- State machine definitions ----
+    // State machine definitions
     typedef enum logic [2:0] {
         STATE_IDLE          = 3'd0,
         STATE_READ          = 3'd1,
@@ -73,7 +73,7 @@ module misc_atomic #(
 
     state_t state_q, state_d;
 
-    // ---- Instruction type decoding ----
+    // Instruction type decoding
     logic is_ll;
     logic is_sc;
     logic is_cas;
@@ -94,7 +94,7 @@ module misc_atomic #(
     logic cross_page;
     assign cross_page = ({1'b0, inst_addr_i[11:0]} + 13'd4) > 13'h1000;
 
-    // ---- Internal registers ----
+    // Internal registers
     logic [DATA_WIDTH-1:0]   read_data_q;      // data read from memory (LL / CAS)
     logic [ADDR_WIDTH-1:0]   addr_q;           // latched memory address
     logic [DATA_WIDTH-1:0]   wdata_q;          // latched write data (SC)
@@ -107,7 +107,7 @@ module misc_atomic #(
     logic                    exception_q;      // latched exception flag
     logic [ADDR_WIDTH-1:0]   exception_addr_q; // latched exception address
 
-    // ---- State machine (sequential) ----
+    // State machine (sequential)
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= STATE_IDLE;
@@ -176,7 +176,7 @@ module misc_atomic #(
         end
     end
 
-    // ---- State machine (combinatorial) ----
+    // State machine (combinatorial)
     always_comb begin
         // Default outputs
         state_d           = state_q;

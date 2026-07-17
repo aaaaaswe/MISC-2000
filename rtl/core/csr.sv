@@ -37,7 +37,7 @@ module misc_csr #(
     input  logic                         monitor_clear_i
 );
 
-    // ---- CSR address constants ----
+    // CSR address constants
     localparam logic [11:0] CSR_EPC           = 12'h300;
     localparam logic [11:0] CSR_ILLEN         = 12'h301;
     localparam logic [11:0] CSR_ECAUSE        = 12'h302;
@@ -46,7 +46,7 @@ module misc_csr #(
     localparam logic [11:0] CSR_MONITOR_ADDR  = 12'h340;
     localparam logic [11:0] CSR_MONITOR_VALID = 12'h341;
 
-    // ---- Internal registers ----
+    // Internal registers
     logic [ADDR_WIDTH-1:0] mepc;           // CSR_EPC
     logic [15:0]           millen;         // CSR_ILLEN (2/4/6/8 bytes)
     logic [3:0]            mecause;        // CSR_ECAUSE
@@ -69,7 +69,7 @@ module misc_csr #(
     assign eret_target_o = mepc + { {(ADDR_WIDTH-16){1'b0}}, millen };
     assign sc_success_o = sc_exec_i & monitor_valid;
 
-    // ---- CSR read multiplexer ----
+    // CSR read multiplexer
     always_comb begin
         csr_rdata_o = {DATA_WIDTH{1'b0}};
         if (csr_ren_i) begin

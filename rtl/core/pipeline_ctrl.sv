@@ -8,78 +8,78 @@ module misc_pipeline_ctrl #(
     parameter int ADDR_WIDTH   = 64,
     parameter int OPCODE_WIDTH = 11
 ) (
-    // ---- Clock and reset ----
+    // Clock and reset
     input  logic                         clk_i,
     input  logic                         rst_n_i,
 
-    // ---- Pipeline control ----
+    // Pipeline control
     input  logic                         stall_i,        // stall the pipeline
     input  logic                         flush_i,        // flush fetch/decode (e.g. branch mispredict)
 
-    // ---- Fetch-stage inputs ----
+    // Fetch-stage inputs
     input  logic [OPCODE_WIDTH-1:0]      opcode_i,       // instruction opcode from fetch
     input  logic [ADDR_WIDTH-1:0]        pc_i,           // program counter from fetch
 
-    // ---- Decode-stage inputs (register file read data) ----
+    // Decode-stage inputs
     input  logic [DATA_WIDTH-1:0]        rs1_data_i,     // register file read data 1
     input  logic [DATA_WIDTH-1:0]        rs2_data_i,     // register file read data 2
 
-    // ---- Execute-stage inputs ----
+    // Execute-stage inputs
     input  logic [DATA_WIDTH-1:0]        alu_result_i,   // ALU result
 
-    // ---- Memory-stage inputs ----
+    // Memory-stage inputs
     input  logic [DATA_WIDTH-1:0]        mem_rdata_i,    // memory read data
 
-    // ---- Branch control ----
+    // Branch control
     input  logic                         branch_taken_i,  // branch was taken
     input  logic [ADDR_WIDTH-1:0]        branch_target_i, // branch target address
 
-    // ---- PC outputs ----
+    // PC outputs
     output logic [ADDR_WIDTH-1:0]        next_pc_o,      // next PC (pc+4 or branch target)
     output logic [ADDR_WIDTH-1:0]        pc_fetch_o,     // PC in fetch stage
     output logic [ADDR_WIDTH-1:0]        pc_decode_o,    // PC in decode stage
     output logic [ADDR_WIDTH-1:0]        pc_execute_o,   // PC in execute stage
     output logic [ADDR_WIDTH-1:0]        pc_memory_o,    // PC in memory stage
 
-    // ---- Opcode outputs (per stage) ----
+    // Opcode outputs
     output logic [OPCODE_WIDTH-1:0]      opcode_decode_o,
     output logic [OPCODE_WIDTH-1:0]      opcode_execute_o,
     output logic [OPCODE_WIDTH-1:0]      opcode_memory_o,
 
-    // ---- Register addresses (from decode stage) ----
+    // Register addresses
     output logic [4:0]                   rs1_addr_o,     // source register 1
     output logic [4:0]                   rs2_addr_o,     // source register 2
     output logic [4:0]                   rd_addr_o,      // destination register
 
-    // ---- ALU interface ----
+    // ALU interface
     output logic [DATA_WIDTH-1:0]        alu_op_a_o,     // ALU operand A
     output logic [DATA_WIDTH-1:0]        alu_op_b_o,     // ALU operand B
     output logic [5:0]                   alu_op_o,       // ALU operation select
 
-    // ---- Memory / register-file control ----
+    // Memory / register-file control
     output logic                         reg_write_o,    // register file write enable
     output logic                         mem_read_o,     // memory read enable
     output logic                         mem_write_o,    // memory write enable
     output logic [DATA_WIDTH-1:0]        mem_wdata_o,    // memory write data
 
-    // ---- Writeback result ----
+    // Writeback result
     output logic [DATA_WIDTH-1:0]        result_o,       // final result (writeback data)
 
-    // ---- Stall status ----
+    // Stall status
     output logic                         stall_fetch_o,  // fetch stage stalled
     output logic                         stall_decode_o, // decode stage stalled
 
-    // ---- Pipeline state (0=IDLE, 1=RUNNING, 2=STALLED, 3=FLUSHING) ----
+    // Pipeline state
     output logic [1:0]                   pipeline_state_o
 );
 
-    // ---- Pipeline state encoding ----
+    // Pipeline state encoding
     localparam logic [1:0] STATE_IDLE    = 2'd0;
     localparam logic [1:0] STATE_RUNNING = 2'd1;
     localparam logic [1:0] STATE_STALLED = 2'd2;
     localparam logic [1:0] STATE_FLUSHING = 2'd3;
 
-    // ---- Pipeline registers ----
+    // Pipeline registers
     logic [ADDR_WIDTH-1:0]   fd_pc;
     logic [OPCODE_WIDTH-1:0] fd_opcode;
     logic                    fd_valid;
@@ -111,13 +111,13 @@ module misc_pipeline_ctrl #(
     logic                    mw_reg_write;
     logic                    mw_valid;
 
-    // ---- Next-state signals ----
+    // Next-state signals
     logic                    flush_active;
     logic                    stall_active;
     logic                    advance_pipe;
     logic [1:0]              next_state;
 
-    // ---- Instruction decode helpers ----
+    // Instruction decode helpers
     logic [4:0]  decode_rs1_addr;
     logic [4:0]  decode_rs2_addr;
     logic [4:0]  decode_rd_addr;
@@ -202,7 +202,7 @@ module misc_pipeline_ctrl #(
         end
     end
 
-    // ---- Pipeline control FSM ----
+    // Pipeline control FSM
     assign flush_active = flush_i || branch_taken_i;
     assign stall_active = stall_i && !flush_active;
 

@@ -34,7 +34,7 @@ module misc_getilen #(
     output logic                         busy_o
 );
 
-    // ---- Local parameters ----
+    // Local parameters
     localparam logic [10:0] OPCODE_GETILEN = 11'h14F;
 
     // State encoding
@@ -45,7 +45,7 @@ module misc_getilen #(
         ST_DONE      = 2'b11
     } state_t;
 
-    // ---- Internal signals ----
+    // Internal signals
     state_t state_q, state_next;
 
     logic                       is_getilen;         // Decoded GETILEN instruction
@@ -56,10 +56,10 @@ module misc_getilen #(
     logic                       result_valid_q;     // Registered result valid
     logic                       page_fault_q;       // Latched page-fault flag
 
-    // ---- GETILEN instruction detection ----
+    // GETILEN instruction detection
     assign is_getilen = (opcode_i == OPCODE_GETILEN) && instr_valid_i;
 
-    // ---- Instruction length decoding helper ----
+    // Instruction length decoding helper
     function automatic logic [DATA_WIDTH-1:0] decode_length(input logic [7:0] byte_val);
         unique case (byte_val[7:6])
             2'b00:   decode_length = {{(DATA_WIDTH-2){1'b0}}, 2'd2};
@@ -70,7 +70,7 @@ module misc_getilen #(
         endcase
     endfunction
 
-    // ---- State machine (sequential) ----
+    // State machine (sequential)
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= ST_IDLE;
@@ -106,7 +106,7 @@ module misc_getilen #(
         end
     end
 
-    // ---- State machine (combinational) ----
+    // State machine (combinational)
     always_comb begin
         state_next = state_q;
         unique case (state_q)

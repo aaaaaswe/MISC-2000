@@ -58,7 +58,7 @@ module misc_decoder (
         return 3'(4 + ((off % OPS_PER_BASE) / MODES_PER_BASE));
     endfunction
 
-    // ---- Decoding ----
+    // Decoding
     // Priority ordering: System late (0x7C0-0x7CF) before SIMD;
     // Integer Arithmetic (0x200-0x407) before Logic (0x408-0x4EF).
     always_comb begin
