@@ -1,8 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
 // MISC-2000 Control and Status Registers — exception handling and LL/SC support.
-// CSR_EPC (0x300), CSR_ILLEN (0x301), CSR_ECAUSE (0x302), CSR_ETVAL (0x303), CSR_ESTATUS (0x304).
-// LL/SC: CSR_MONITOR_ADDR (0x340), CSR_MONITOR_VALID (0x341).
 
 module misc_csr #(
     parameter int DATA_WIDTH = 64,
@@ -46,7 +44,6 @@ module misc_csr #(
     localparam logic [11:0] CSR_MONITOR_ADDR  = 12'h340;
     localparam logic [11:0] CSR_MONITOR_VALID = 12'h341;
 
-    // Internal registers
     logic [ADDR_WIDTH-1:0] mepc;           // CSR_EPC
     logic [15:0]           millen;         // CSR_ILLEN (2/4/6/8 bytes)
     logic [3:0]            mecause;        // CSR_ECAUSE
@@ -55,7 +52,6 @@ module misc_csr #(
     logic [ADDR_WIDTH-1:0] monitor_addr;   // CSR_MONITOR_ADDR
     logic                  monitor_valid;  // CSR_MONITOR_VALID
 
-    // ILLEN decode: encoded 0->2B, 1->4B, 2->6B, 3->8B
     function automatic logic [15:0] decode_ilen(input logic [2:0] encoded);
         unique case (encoded)
             3'd0: decode_ilen = 16'd2;
@@ -69,7 +65,6 @@ module misc_csr #(
     assign eret_target_o = mepc + { {(ADDR_WIDTH-16){1'b0}}, millen };
     assign sc_success_o = sc_exec_i & monitor_valid;
 
-    // CSR read multiplexer
     always_comb begin
         csr_rdata_o = {DATA_WIDTH{1'b0}};
         if (csr_ren_i) begin

@@ -1,8 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
 // MISC-2000 Register File — NUM_REGS registers, DATA_WIDTH bits each.
-// x0 is hardwired to zero; dual combinational read ports; single sync write.
-// Write-through forwarding for same-cycle reads.
 
 module misc_regfile #(
     parameter int DATA_WIDTH = 64,
@@ -28,7 +26,6 @@ module misc_regfile #(
     input  logic [2:0]                     rd_width_i
 );
 
-    // Local parameters / helpers
     localparam int UPPER_BYTE = (DATA_WIDTH > 8)  ? (DATA_WIDTH - 8)  : 0;
     localparam int UPPER_HALF = (DATA_WIDTH > 16) ? (DATA_WIDTH - 16) : 0;
     localparam int UPPER_WORD = (DATA_WIDTH > 32) ? (DATA_WIDTH - 32) : 0;
@@ -58,16 +55,13 @@ module misc_regfile #(
         return result;
     endfunction
 
-    // Register array
     logic [DATA_WIDTH-1:0] regs [NUM_REGS-1:0];
 
-    // Combinational reads (x0 hardwired to zero)
     wire [DATA_WIDTH-1:0] rf_rs1_raw = regs[rs1_addr_i];
     wire [DATA_WIDTH-1:0] rf_rs2_raw = regs[rs2_addr_i];
     wire [DATA_WIDTH-1:0] rf_rs1 = (rs1_addr_i == '0) ? '0 : rf_rs1_raw;
     wire [DATA_WIDTH-1:0] rf_rs2 = (rs2_addr_i == '0) ? '0 : rf_rs2_raw;
 
-    // Write-through forwarding
     wire [DATA_WIDTH-1:0] rf_rd_raw = regs[rd_addr_i];
     logic [DATA_WIDTH-1:0] fwd_data;
 

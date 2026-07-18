@@ -1,7 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
 // MISC-2000 5-Stage Pipeline Controller — Fetch → Decode → Execute → Memory → Writeback.
-// Supports stall, flush, and branch target redirection.
 
 module misc_pipeline_ctrl #(
     parameter int DATA_WIDTH   = 64,

@@ -1,7 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
 // MISC-2000 Atomic Instructions — LL.D, SC.D, CAS.D, FENCE.
-// State: IDLE → READ → CHECK_MONITOR → WRITE → DONE.
 
 module misc_atomic #(
     parameter int DATA_WIDTH = 64,
@@ -62,7 +61,6 @@ module misc_atomic #(
     localparam logic [10:0] OP_CAS_STK   = 11'h148;
     localparam logic [10:0] OP_FENCE     = 11'h15E;
 
-    // State machine definitions
     typedef enum logic [2:0] {
         STATE_IDLE          = 3'd0,
         STATE_READ          = 3'd1,
@@ -73,7 +71,6 @@ module misc_atomic #(
 
     state_t state_q, state_d;
 
-    // Instruction type decoding
     logic is_ll;
     logic is_sc;
     logic is_cas;
@@ -90,11 +87,9 @@ module misc_atomic #(
     assign is_fence = (opcode_i == OP_FENCE);
     assign is_atomic = is_ll || is_sc || is_cas || is_fence;
 
-    // Cross-page detection: 4-byte atomics must not cross 4 KB boundary
     logic cross_page;
     assign cross_page = ({1'b0, inst_addr_i[11:0]} + 13'd4) > 13'h1000;
 
-    // Internal registers
     logic [DATA_WIDTH-1:0]   read_data_q;      // data read from memory (LL / CAS)
     logic [ADDR_WIDTH-1:0]   addr_q;           // latched memory address
     logic [DATA_WIDTH-1:0]   wdata_q;          // latched write data (SC)
@@ -107,7 +102,6 @@ module misc_atomic #(
     logic                    exception_q;      // latched exception flag
     logic [ADDR_WIDTH-1:0]   exception_addr_q; // latched exception address
 
-    // State machine (sequential)
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= STATE_IDLE;

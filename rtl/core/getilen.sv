@@ -1,7 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 GETILEN (Get Instruction Length) — opcode 0x14F, reads target byte bit[7:6] -> length (2/4/6/8).
-// Returns instruction length to Rd without executing target. Page fault exception_addr = operand address.
+// MISC-2000 GETILEN — returns instruction length (2/4/6/8 bytes) to Rd.
 
 module misc_getilen #(
     parameter int DATA_WIDTH = 64,
@@ -34,10 +33,8 @@ module misc_getilen #(
     output logic                         busy_o
 );
 
-    // Local parameters
     localparam logic [10:0] OPCODE_GETILEN = 11'h14F;
 
-    // State encoding
     typedef enum logic [1:0] {
         ST_IDLE      = 2'b00,
         ST_READ_BYTE = 2'b01,
@@ -45,7 +42,6 @@ module misc_getilen #(
         ST_DONE      = 2'b11
     } state_t;
 
-    // Internal signals
     state_t state_q, state_next;
 
     logic                       is_getilen;         // Decoded GETILEN instruction
@@ -56,10 +52,8 @@ module misc_getilen #(
     logic                       result_valid_q;     // Registered result valid
     logic                       page_fault_q;       // Latched page-fault flag
 
-    // GETILEN instruction detection
     assign is_getilen = (opcode_i == OPCODE_GETILEN) && instr_valid_i;
 
-    // Instruction length decoding helper
     function automatic logic [DATA_WIDTH-1:0] decode_length(input logic [7:0] byte_val);
         unique case (byte_val[7:6])
             2'b00:   decode_length = {{(DATA_WIDTH-2){1'b0}}, 2'd2};
@@ -70,7 +64,6 @@ module misc_getilen #(
         endcase
     endfunction
 
-    // State machine (sequential)
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= ST_IDLE;
@@ -106,7 +99,6 @@ module misc_getilen #(
         end
     end
 
-    // State machine (combinational)
     always_comb begin
         state_next = state_q;
         unique case (state_q)

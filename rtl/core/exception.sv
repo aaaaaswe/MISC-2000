@@ -1,7 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Exception Management — priority encoder: IFU page fault > mem page fault > illegal instr.
-// ERET target: CSR_EPC + CSR_ILLEN; handler vector: 0x8000_0000.
+// MISC-2000 Exception Management — priority encoder, ERET support.
 
 module misc_exception #(
     parameter int DATA_WIDTH = 64,
@@ -48,21 +47,15 @@ module misc_exception #(
     output logic                     exception_active_o
 );
 
-    // Local parameters
     localparam logic [3:0] EXC_CAUSE_ILLEGAL_INSTR    = 4'h2;
     localparam logic [3:0] EXC_CAUSE_INSTR_PAGE_FAULT  = 4'hC;
     localparam logic [3:0] EXC_CAUSE_LDST_PAGE_FAULT   = 4'hD;
 
-    // IFU exception cause encoding (from IFU)
     localparam logic [1:0] IFU_CAUSE_PAGE_FAULT        = 2'b00;
-
-    // Memory exception cause encoding (from memory stage)
     localparam logic [1:0] MEM_CAUSE_PAGE_FAULT        = 2'b00;
 
-    // Exception handler entry point (vector address)
     localparam logic [ADDR_WIDTH-1:0] EXC_VECTOR_ADDR  = {ADDR_WIDTH{1'b0}} | 64'h0000_0000_8000_0000;
 
-    // Internal signals
     logic                        exception_detected;
     logic [ADDR_WIDTH-1:0]       selected_exc_pc;
     logic [2:0]                  selected_exc_ilen;
@@ -73,8 +66,6 @@ module misc_exception #(
     logic [3:0]                  exception_cause_q;
     logic                        take_exception;
 
-    // Exception priority encoder
-    // IFU page fault > mem page fault > illegal instr
     always_comb begin
         exception_detected  = 1'b0;
         selected_exc_pc     = '0;

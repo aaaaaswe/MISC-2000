@@ -1,7 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Instruction Fetch Unit — variable-length CISC (2/4/6/8 bytes by bit[7:6]).
-// Reads in 2-byte chunks; cross-page faults report instruction start address.
+// MISC-2000 Instruction Fetch Unit — variable-length CISC (2/4/6/8 bytes).
 
 module misc_ifu #(
     parameter int DATA_WIDTH = 64,
@@ -48,18 +47,15 @@ module misc_ifu #(
     localparam int PAGE_SIZE   = 13'h1000;
     localparam int PAGE_MASK   = 12'hFFF;
 
-    // Exception cause encoding
     localparam logic [1:0] EXC_PAGE_FAULT       = 2'b00;
     localparam logic [1:0] EXC_ILLEGAL_INSTR    = 2'b01;
     localparam logic [1:0] EXC_ATOMIC_CROSS_PAGE = 2'b10;
 
-    // Instruction-length encoding (output)
     localparam logic [2:0] LEN_2B = 3'd0;
     localparam logic [2:0] LEN_4B = 3'd1;
     localparam logic [2:0] LEN_6B = 3'd2;
     localparam logic [2:0] LEN_8B = 3'd3;
 
-    // State machine definition
     typedef enum logic [1:0] {
         IDLE            = 2'b00,
         FETCH_FIRST     = 2'b01,
@@ -69,7 +65,6 @@ module misc_ifu #(
 
     state_t state;
 
-    // Internal registers
     logic [ADDR_WIDTH-1:0] fetch_addr_reg;
     logic [ADDR_WIDTH-1:0] instr_start_addr;
     logic [63:0] instr_buffer;
@@ -77,11 +72,9 @@ module misc_ifu #(
     logic [3:0] bytes_fetched;
     logic [3:0] total_bytes_needed;
 
-    // Combinational helpers
     logic fetching_active;
     assign fetching_active = (state == FETCH_FIRST) || (state == FETCH_REMAINING);
 
-    // State machine + registers
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state            <= IDLE;

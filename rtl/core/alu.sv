@@ -1,7 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
 // MISC-2000 ALU — 64-bit operations with configurable data width (8/16/32/64-bit).
-// Generates zero, negative, overflow, and carry flags.
 
 module misc_alu (
     input  logic [63:0] op_a_i,
