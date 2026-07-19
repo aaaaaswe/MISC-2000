@@ -194,7 +194,6 @@ module misc_atomic #(
         busy_o            = 1'b0;
         fence_exec_o      = 1'b0;
 
-        // ----- Main state machine -----------------------------------------
         unique case (state_q)
 
             STATE_IDLE: begin
@@ -280,10 +279,8 @@ module misc_atomic #(
         endcase
     end
 
-    // ---- Assertions (synthesis off) ----
     // synthesis translate_off
     `ifndef SYNTHESIS
-    // Check that we don't drive read and write simultaneously
     always_comb begin
         if (rst_n_i && mem_read_o && mem_write_o) begin
             $display("ERROR: Atomic: mem_read_o and mem_write_o both asserted at time %0t", $time);

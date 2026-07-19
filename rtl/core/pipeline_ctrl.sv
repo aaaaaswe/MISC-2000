@@ -136,24 +136,21 @@ module misc_pipeline_ctrl #(
         decode_mem_write = 1'b0;
 
         if (fd_opcode >= 11'h100 && fd_opcode <= 11'h1FF) begin
-            // ---- Data Transfer ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
-            decode_mem_read  = ~fd_opcode[5];   // loads
-            decode_mem_write =  fd_opcode[5];   // stores
-            decode_reg_write = ~fd_opcode[5];   // loads write back to register
+            decode_mem_read  = ~fd_opcode[5];
+            decode_mem_write =  fd_opcode[5];
+            decode_reg_write = ~fd_opcode[5];
 
         end else if (fd_opcode >= 11'h200 && fd_opcode <= 11'h407) begin
-            // ---- Integer Arithmetic ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
-            decode_alu_op    = fd_opcode[5:0];   // lower 6 bits select ALU op
+            decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
 
         end else if (fd_opcode >= 11'h408 && fd_opcode <= 11'h4EF) begin
-            // ---- Logic ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
@@ -161,7 +158,6 @@ module misc_pipeline_ctrl #(
             decode_reg_write = 1'b1;
 
         end else if (fd_opcode >= 11'h500 && fd_opcode <= 11'h62B) begin
-            // ---- Float ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
@@ -169,14 +165,12 @@ module misc_pipeline_ctrl #(
             decode_reg_write = 1'b1;
 
         end else if (fd_opcode >= 11'h62C && fd_opcode <= 11'h6FF) begin
-            // ---- Program Control ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = 5'd0;
 
         end else if ((fd_opcode >= 11'h700 && fd_opcode <= 11'h7BF) ||
                      (fd_opcode >= 11'h7D0 && fd_opcode <= 11'h7FF)) begin
-            // ---- SIMD Vector ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
@@ -184,14 +178,12 @@ module misc_pipeline_ctrl #(
             decode_reg_write = 1'b1;
 
         end else if (fd_opcode >= 11'h7C0 && fd_opcode <= 11'h7CF) begin
-            // ---- System (late) ----
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
-            decode_reg_write = 1'b0;   // system ops do not write GPRs here
+            decode_reg_write = 1'b0;
 
         end else begin
-            // ---- Vendor zone (0x000..0x0FF) or invalid -> NOP ----
             decode_rs1_addr  = 5'd0;
             decode_rs2_addr  = 5'd0;
             decode_rd_addr   = 5'd0;
@@ -363,8 +355,6 @@ module misc_pipeline_ctrl #(
     assign mem_write_o = em_mem_write && em_valid;
     assign mem_wdata_o = em_mem_wdata;
 
-    // Writeback result — select between ALU result and memory read data.
-    // Load instructions return mem_rdata; all others return alu_result.
     assign result_o = (mw_valid && (mw_opcode >= 11'h100 && mw_opcode <= 11'h1FF && !mw_opcode[5]))
                       ? mw_mem_rdata
                       : mw_alu_result;

@@ -253,7 +253,6 @@ module misc_ifu #(
         end
     end
 
-    // Continuous output assignments
     assign fetch_addr_o = fetch_addr_reg;
 
 endmodule

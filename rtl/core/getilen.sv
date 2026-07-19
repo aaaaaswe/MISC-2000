@@ -134,15 +134,12 @@ module misc_getilen #(
         endcase
     end
 
-    // Memory interface: address is registered; read enable is one-cycle pulse in READ_BYTE.
     assign mem_addr_o = addr_q;
     assign mem_read_o = (state_q == ST_READ_BYTE);
 
-    // Exception outputs (registered). On page fault, exception_addr = operand address.
     assign exception_o      = exception_q;
     assign exception_addr_o = exception_addr_q;
 
-    // Result outputs (registered)
     assign result_o       = result_q;
     assign result_valid_o = result_valid_q;
 

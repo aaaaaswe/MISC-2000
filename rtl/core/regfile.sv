@@ -9,7 +9,6 @@ module misc_regfile #(
     parameter int ADDR_WIDTH = 5,
     parameter int NUM_REGS   = 32
 ) (
-    // Clock and reset (asynchronous active-low clear)
     input  logic                          clk_i,
     input  logic                          rst_n_i,
 

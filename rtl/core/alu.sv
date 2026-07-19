@@ -222,7 +222,6 @@ module misc_alu (
         raw_carry    = 1'b0;
 
         unique case (alu_op_i)
-            // ---- Arithmetic ----
             OP_ADD: begin
                 raw_result   = add_ext[63:0];
                 raw_carry    = add_carry;
@@ -255,7 +254,6 @@ module misc_alu (
                 raw_result = div_remainder;
             end
 
-            // ---- Logical ----
             OP_AND: begin
                 raw_result = op_a_m & op_b_m;
             end
@@ -272,7 +270,6 @@ module misc_alu (
                 raw_result = ~op_a_m;
             end
 
-            // ---- Shifts & Rotates ----
             OP_SHL: begin
                 raw_result = op_a_m << shift_amt;
             end
@@ -297,16 +294,15 @@ module misc_alu (
                 raw_result = (op_a_m >> rot_amt) | (op_a_m << ((7'(msb_pos) + 7'd1) - rot_amt));
             end
 
-            // ---- Unary Arithmetic ----
             OP_INC: begin
                 raw_result   = op_a_m + 64'd1;
-                raw_carry    = (op_a_m == data_mask);   // carry out when wrapping
+                raw_carry    = (op_a_m == data_mask);
                 raw_overflow = (op_a_m[msb_pos] == 1'b0) && (raw_result[msb_pos] == 1'b1);
             end
 
             OP_DEC: begin
                 raw_result   = op_a_m - 64'd1;
-                raw_carry    = (op_a_m == 64'd0);       // borrow when wrapping from 0
+                raw_carry    = (op_a_m == 64'd0);
                 raw_overflow = (op_a_m[msb_pos] == 1'b1) && (raw_result[msb_pos] == 1'b0);
             end
 
@@ -323,7 +319,6 @@ module misc_alu (
                 raw_overflow = (op_a_sext < 0) && (raw_result[msb_pos] == 1'b1);
             end
 
-            // ---- Compare & Test ----
             OP_CMP: begin
                 raw_result = 64'd0;
                 raw_carry    = ~sub_borrow;
@@ -335,7 +330,6 @@ module misc_alu (
                 raw_result = 64'd0;
             end
 
-            // ---- MIN / MAX (signed) ----
             OP_MIN: begin
                 raw_result = (op_a_sext < op_b_sext) ? op_a_m : op_b_m;
             end
@@ -344,7 +338,6 @@ module misc_alu (
                 raw_result = (op_a_sext > op_b_sext) ? op_a_m : op_b_m;
             end
 
-            // ---- MIN / MAX (unsigned) ----
             OP_MINU: begin
                 raw_result = (op_a_m < op_b_m) ? op_a_m : op_b_m;
             end
@@ -353,7 +346,6 @@ module misc_alu (
                 raw_result = (op_a_m > op_b_m) ? op_a_m : op_b_m;
             end
 
-            // ---- Bit Manipulation ----
             OP_CLZ: begin
                 raw_result = clz_func(op_a_i);
             end
@@ -374,7 +366,6 @@ module misc_alu (
                 raw_result = bitrev_func(op_a_i);
             end
 
-            // ---- Sign / Zero Extension ----
             OP_SEXT_B: begin raw_result = {{56{op_a_i[7]}}, op_a_i[7:0]}; end
             OP_SEXT_W: begin raw_result = {{48{op_a_i[15]}}, op_a_i[15:0]}; end
             OP_ZEXT_B: begin raw_result = {56'd0, op_a_i[7:0]}; end
