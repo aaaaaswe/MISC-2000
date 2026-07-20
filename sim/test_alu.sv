@@ -1,24 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// =============================================================================
-// MISC-2000 ALU Testbench
-// =============================================================================
-// Comprehensive self-checking testbench for the misc_alu module.
-// Tests all ALU operations across all data widths (B/W/D/Q).
-// Verifies result_o, zero_o, negative_o, overflow_o, and carry_o flags.
+// ALU Testbench: all operations across data widths (B/W/D/Q).
+// Verifies result, zero, negative, overflow, carry flags.
 
 module tb_alu;
 

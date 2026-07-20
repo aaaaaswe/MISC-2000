@@ -1,7 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 GETILEN (Get Instruction Length) — opcode 0x14F, reads target byte bit[7:6] -> length (2/4/6/8).
-// Returns instruction length to Rd without executing target. Page fault exception_addr = operand address.
+// GETILEN: opcode 0x14F, reads target byte bit[7:6] → length (2/4/6/8)
+// Returns length to Rd without executing; page fault addr = operand address
 
 module misc_getilen #(
     parameter int DATA_WIDTH = 64,

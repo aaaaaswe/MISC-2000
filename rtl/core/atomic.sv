@@ -1,7 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Atomic Instructions — LL.D, SC.D, CAS.D, FENCE.
-// State: IDLE → READ → CHECK_MONITOR → WRITE → DONE.
+// Atomic Instructions: LL.D, SC.D, CAS.D, FENCE
+// State: IDLE → READ → CHECK_MONITOR → WRITE → DONE
 
 module misc_atomic #(
     parameter int DATA_WIDTH = 64,

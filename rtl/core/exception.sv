@@ -1,7 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Exception Management — priority encoder: IFU page fault > mem page fault > illegal instr.
-// ERET target: CSR_EPC + CSR_ILLEN; handler vector: 0x8000_0000.
+// Exception Management: IFU page fault > mem page fault > illegal instr
+// ERET: PC = CSR_EPC + CSR_ILLEN; handler vector: 0x8000_0000
 
 module misc_exception #(
     parameter int DATA_WIDTH = 64,

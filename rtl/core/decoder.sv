@@ -1,6 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Instruction Decoder — 11-bit opcode -> class / addr-mode / dtype.
+// Instruction Decoder: 11-bit opcode → class / addr-mode / dtype.
 // Priority: Int Arithmetic > Logic (0x400-0x407); System late > SIMD.
 
 module misc_decoder (

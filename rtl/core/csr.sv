@@ -1,8 +1,8 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// MISC-2000 Control and Status Registers — exception handling and LL/SC support.
-// CSR_EPC (0x300), CSR_ILLEN (0x301), CSR_ECAUSE (0x302), CSR_ETVAL (0x303), CSR_ESTATUS (0x304).
-// LL/SC: CSR_MONITOR_ADDR (0x340), CSR_MONITOR_VALID (0x341).
+// Control and Status Registers: exception handling and LL/SC support
+// EPC(0x300), ILLEN(0x301), ECAUSE(0x302), ETVAL(0x303), ESTATUS(0x304)
+// LL/SC: MONITOR_ADDR(0x340), MONITOR_VALID(0x341)
 
 module misc_csr #(
     parameter int DATA_WIDTH = 64,

@@ -1,9 +1,7 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-
-// Testbench for the MISC-2000 Register File (misc_regfile).
-// Tests: x0 hardwired-zero, write/read, sub-word writes,
-// forwarding, reset, and full 32-register sweep.
+// Register File Testbench: x0 hardwired-zero, write/read, sub-word writes,
+// forwarding, reset, full 32-register sweep.
 
 
 

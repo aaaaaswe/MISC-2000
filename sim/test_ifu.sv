@@ -1,30 +1,7 @@
-//=============================================================================
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//=============================================================================
-//
-// MISC-2000 Instruction Fetch Unit (misc_ifu) Testbench
-//
-// Comprehensive self-checking testbench for the misc_ifu module.
-// Tests all instruction lengths (2/4/6/8 bytes), cross-page detection,
-// page faults, pipeline control (flush/stall/branch), and atomic
-// cross-page detection.
-//
-// The IFU presents instruction outputs in the DONE state.  With
-// stall_i=0 the DONE→FETCH_FIRST transition happens immediately (the
-// last NBA to instr_valid_o wins and clears it).  Therefore normal-fetch
-// tests use stall_i=1 to hold the IFU in DONE while outputs are sampled.
-// Exception tests do not need stall because the exception is latched.
-//=============================================================================
+// Copyright 2026 The MISC-2000 Authors.
+// SPDX-License-Identifier: Apache-2.0
+// IFU Testbench: instruction lengths (2/4/6/8 bytes), cross-page detection,
+// page faults, pipeline control (flush/stall/branch), atomic cross-page.
 
 `include "../rtl/core/ifu.sv"
 
