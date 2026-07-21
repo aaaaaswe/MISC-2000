@@ -3,8 +3,6 @@
 // Decoder Testbench: all instruction classes, boundaries, special opcodes,
 // invalid opcodes, priority encoding.
 
-
-
 module tb_decoder;
 
     // =========================================================================
