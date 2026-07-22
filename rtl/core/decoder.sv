@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Instruction Decoder: 11-bit opcode → class / addr-mode / dtype.
 // Priority: Int Arithmetic > Logic (0x400-0x407); System late > SIMD.
-
 module misc_decoder (
     input  logic [10:0] opcode_i,
     output logic [3:0]  inst_class_o,   // see CLASS_* below

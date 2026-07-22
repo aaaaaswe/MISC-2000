@@ -3,7 +3,6 @@
 // Control and Status Registers: exception handling and LL/SC support
 // EPC(0x300), ILLEN(0x301), ECAUSE(0x302), ETVAL(0x303), ESTATUS(0x304)
 // LL/SC: MONITOR_ADDR(0x340), MONITOR_VALID(0x341)
-
 module misc_csr #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 64

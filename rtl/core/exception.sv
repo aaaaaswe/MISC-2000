@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Exception Management: IFU page fault > mem page fault > illegal instr
 // ERET: PC = CSR_EPC + CSR_ILLEN; handler vector: 0x8000_0000
-
 module misc_exception #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 64

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Atomic Instructions: LL.D, SC.D, CAS.D, FENCE
 // State: IDLE → READ → CHECK_MONITOR → WRITE → DONE
-
 module misc_atomic #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 64
