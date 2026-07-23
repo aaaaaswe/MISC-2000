@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Atomic Instruction Testbench: tests LL.D, SC.D, CAS.D, cross-page detection,
-// FENCE, and page-fault handling.
 
 `include "../rtl/core/atomic.sv"
 `include "../rtl/core/csr.sv"
@@ -700,7 +698,7 @@ module tb_atomic;
         end
         $display("============================================================\n");
 
-        $stop;
+        $finish;
     end
 
     // =========================================================================

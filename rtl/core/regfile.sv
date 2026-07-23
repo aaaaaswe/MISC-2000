@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Register File: NUM_REGS × DATA_WIDTH. x0 hardwired to zero.
-// Dual combinational read; single sync write. Write-through forwarding.
 module misc_regfile #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 5,

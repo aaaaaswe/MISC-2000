@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Register File Testbench: x0 hardwired-zero, write/read, sub-word writes,
-// forwarding, reset, full 32-register sweep.
 
 `timescale 1ns / 1ps
 
@@ -399,7 +397,7 @@ module tb_regfile;
             $display("SOME TESTS FAILED");
         end
 
-        $stop;
+        $finish;
     end
 
 endmodule

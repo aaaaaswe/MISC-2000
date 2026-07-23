@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Exception & CSR Testbench: tests entry, priority, ERET calculation,
-// CSR read/write, pipeline flush, exception-active state.
 
 `include "../rtl/core/exception.sv"
 `include "../rtl/core/csr.sv"

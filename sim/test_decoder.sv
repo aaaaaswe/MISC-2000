@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Decoder Testbench: all instruction classes, boundaries, special opcodes,
-// invalid opcodes, priority encoding.
 
 module tb_decoder;
 
@@ -410,7 +408,7 @@ module tb_decoder;
         else
             $display(" SOME TESTS FAILED");
 
-        $stop;
+        $finish;
     end
 
 endmodule

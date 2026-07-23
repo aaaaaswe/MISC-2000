@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Instruction Fetch Unit: variable-length CISC (2/4/6/8 bytes by bit[7:6])
-// 2-byte chunks; cross-page faults report instruction start address
 module misc_ifu #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 64

@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// GETILEN Testbench: instruction length decoding (2B/4B/6B/8B),
-// page fault handling, busy signal, opcode gating.
 
 `include "../rtl/core/getilen.sv"
 

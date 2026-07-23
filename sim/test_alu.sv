@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// ALU Testbench: all operations across data widths (B/W/D/Q).
-// Verifies result, zero, negative, overflow, carry flags.
 
 module tb_alu;
 
@@ -1009,7 +1007,7 @@ module tb_alu;
         end
         $display("============================================================\n");
 
-        $stop;
+        $finish;
     end
 
 endmodule

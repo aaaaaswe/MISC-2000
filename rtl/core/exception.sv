@@ -1,7 +1,5 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Exception Management: IFU page fault > mem page fault > illegal instr
-// ERET: PC = CSR_EPC + CSR_ILLEN; handler vector: 0x8000_0000
 module misc_exception #(
     parameter int DATA_WIDTH = 64,
     parameter int ADDR_WIDTH = 64
@@ -58,8 +56,7 @@ module misc_exception #(
     // Memory exception cause encoding (from memory stage)
     localparam logic [1:0] MEM_CAUSE_PAGE_FAULT        = 2'b00;
 
-    // Exception handler entry point (vector address)
-    localparam logic [ADDR_WIDTH-1:0] EXC_VECTOR_ADDR  = {ADDR_WIDTH{1'b0}} | 64'h0000_0000_8000_0000;
+    localparam logic [ADDR_WIDTH-1:0] EXC_VECTOR_ADDR = 64'h8000_0000;
 
     // Internal signals
     logic                        exception_detected;
