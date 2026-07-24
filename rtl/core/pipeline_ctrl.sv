@@ -264,10 +264,10 @@ module misc_pipeline_ctrl #(
             em_alu_result <= alu_result_i;
             em_mem_wdata  <= de_rs2_data;
             em_rd_addr    <= de_rd_addr;
-            em_reg_write  <= decode_reg_write & de_valid;
-            em_mem_read   <= decode_mem_read  & de_valid;
-            em_mem_write  <= decode_mem_write & de_valid;
-            em_valid      <= de_valid;
+            em_reg_write  <= 1'b0;
+            em_mem_read   <= 1'b0;
+            em_mem_write  <= 1'b0;
+            em_valid      <= 1'b0;
 
             mw_pc         <= em_pc;
             mw_opcode     <= em_opcode;

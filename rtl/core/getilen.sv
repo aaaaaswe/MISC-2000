@@ -36,12 +36,10 @@ module misc_getilen #(
     // Local parameters
     localparam logic [10:0] OPCODE_GETILEN = 11'h14F;
 
-    // State encoding
     typedef enum logic [1:0] {
         ST_IDLE      = 2'b00,
-        ST_READ_BYTE = 2'b01,
-        ST_WAIT_READ = 2'b10,
-        ST_DONE      = 2'b11
+        ST_WAIT_READ = 2'b01,
+        ST_DONE      = 2'b10
     } state_t;
 
     // Internal signals
@@ -105,17 +103,12 @@ module misc_getilen #(
         end
     end
 
-    // State machine (combinational)
     always_comb begin
         state_next = state_q;
         unique case (state_q)
             ST_IDLE: begin
                 if (is_getilen)
-                    state_next = ST_READ_BYTE;
-            end
-
-            ST_READ_BYTE: begin
-                state_next = ST_WAIT_READ;
+                    state_next = ST_WAIT_READ;
             end
 
             ST_WAIT_READ: begin
@@ -134,7 +127,7 @@ module misc_getilen #(
     end
 
     assign mem_addr_o = addr_q;
-    assign mem_read_o = (state_q == ST_READ_BYTE);
+    assign mem_read_o = (state_q == ST_WAIT_READ);
 
     assign exception_o      = exception_q;
     assign exception_addr_o = exception_addr_q;

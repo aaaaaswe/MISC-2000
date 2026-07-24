@@ -54,6 +54,16 @@ module misc_csr #(
     logic [ADDR_WIDTH-1:0] monitor_addr;   // CSR_MONITOR_ADDR
     logic                  monitor_valid;  // CSR_MONITOR_VALID
 
+    // ESTATUS field definitions
+    localparam int MESTATUS_UPIE = 0;       // User Previous Interrupt Enable
+    localparam int MESTATUS_SPIE = 1;       // Supervisor Previous Interrupt Enable
+    localparam int MESTATUS_HPIE = 2;       // Hypervisor Previous Interrupt Enable
+    localparam int MESTATUS_MPIE = 3;       // Machine Previous Interrupt Enable
+    localparam int MESTATUS_UIE  = 4;       // User Interrupt Enable
+    localparam int MESTATUS_SIE  = 5;       // Supervisor Interrupt Enable
+    localparam int MESTATUS_HIE  = 6;       // Hypervisor Interrupt Enable
+    localparam int MESTATUS_MIE  = 7;       // Machine Interrupt Enable
+
     // ILLEN decode: encoded 0->2B, 1->4B, 2->6B, 3->8B
     function automatic logic [15:0] decode_ilen(input logic [2:0] encoded);
         unique case (encoded)
@@ -99,6 +109,8 @@ module misc_csr #(
                 mepc    <= exception_pc_i;
                 millen  <= decode_ilen(exception_ilen_i);
                 mecause <= exception_cause_i;
+                mestatus[MESTATUS_MPIE] <= mestatus[MESTATUS_MIE];
+                mestatus[MESTATUS_MIE]  <= 1'b0;
             end
 
             if (csr_wen_i) begin
@@ -121,6 +133,11 @@ module misc_csr #(
 
             if (sc_exec_i) begin
                 monitor_valid <= 1'b0;
+            end
+
+            if (eret_exec_i) begin
+                mestatus[MESTATUS_MIE]  <= mestatus[MESTATUS_MPIE];
+                mestatus[MESTATUS_MPIE] <= 1'b1;
             end
 
             if (monitor_clear_i) begin

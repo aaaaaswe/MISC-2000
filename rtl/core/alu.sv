@@ -156,8 +156,8 @@ module misc_alu (
     assign mul_full = op_a_m * op_b_m;
 
     // Division by zero protection
-    assign div_quotient  = (op_b_m == 64'd0) ? 64'd0 : (op_a_m / op_b_m);
-    assign div_remainder = (op_b_m == 64'd0) ? 64'd0 : (op_a_m % op_b_m);
+    assign div_quotient  = (op_b_m == 64'd0) ? {64{1'b1}} : (op_a_m / op_b_m);
+    assign div_remainder = (op_b_m == 64'd0) ? op_a_m : (op_a_m % op_b_m);
 
     // Bit manipulation helpers
     function automatic logic [63:0] clz_func(input logic [63:0] val);

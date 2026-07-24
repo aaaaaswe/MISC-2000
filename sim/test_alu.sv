@@ -383,9 +383,9 @@ module tb_alu;
         test_op("DIV 0x64/0xA=0xA (Q)", 64'h64, 64'hA, OP_DIV, DW_Q,
                 64'hA, 1'b0, 1'b0, 1'b0, 1'b0);
 
-        // DIV: division by zero -> result = 0
+        // DIV: division by zero -> result = all ones
         test_op("DIV by zero (Q)", 64'h100, 64'h0, OP_DIV, DW_Q,
-                64'h0, 1'b1, 1'b0, 1'b0, 1'b0);
+                64'hFFFFFFFFFFFFFFFF, 1'b0, 1'b1, 1'b0, 1'b0);
 
         // DIV: 0xFFFFFFFF / 0x2 (D width)
         apply_op(64'hFFFFFFFF, 64'h2, OP_DIV, DW_D);
@@ -408,9 +408,9 @@ module tb_alu;
         test_op("MOD 0x64%%0xA=0 (Q)", 64'h64, 64'hA, OP_MOD, DW_Q,
                 64'h0, 1'b1, 1'b0, 1'b0, 1'b0);
 
-        // MOD: modulo by zero -> result = 0
+        // MOD: modulo by zero -> result = dividend
         test_op("MOD by zero (Q)", 64'h100, 64'h0, OP_MOD, DW_Q,
-                64'h0, 1'b1, 1'b0, 1'b0, 1'b0);
+                64'h100, 1'b0, 1'b0, 1'b0, 1'b0);
 
         // MOD: 0x64 % 0x7 = 0x2
         apply_op(64'h64, 64'h7, OP_MOD, DW_Q);

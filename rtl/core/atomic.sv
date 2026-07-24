@@ -89,9 +89,17 @@ module misc_atomic #(
     assign is_fence = (opcode_i == OP_FENCE);
     assign is_atomic = is_ll || is_sc || is_cas || is_fence;
 
-    // Cross-page detection: 4-byte atomics must not cross 4 KB boundary
+    // Cross-page detection: atomics must not cross 4 KB boundary
+    logic [12:0] addr_offset;
     logic cross_page;
-    assign cross_page = ({1'b0, inst_addr_i[11:0]} + 13'd4) > 13'h1000;
+    always_comb begin
+        unique case (DATA_WIDTH)
+            32: addr_offset = 13'd4;
+            64: addr_offset = 13'd8;
+            default: addr_offset = 13'd4;
+        endcase
+        cross_page = ({1'b0, inst_addr_i[11:0]} + addr_offset) >= 13'h1000;
+    end
 
     // Internal registers
     logic [DATA_WIDTH-1:0]   read_data_q;      // data read from memory (LL / CAS)
