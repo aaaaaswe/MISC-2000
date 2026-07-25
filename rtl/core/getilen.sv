@@ -1,6 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// GETILEN: opcode 0x14F, reads target byte bit[7:6] → length (2/4/6/8)
+// GETILEN: opcode 0x0FE (vendor zone), reads target byte bit[7:6] → length (2/4/6/8)
 // Returns length to Rd without executing; page fault addr = operand address
 module misc_getilen #(
     parameter int DATA_WIDTH = 64,
@@ -34,7 +34,7 @@ module misc_getilen #(
 );
 
     // Local parameters
-    localparam logic [10:0] OPCODE_GETILEN = 11'h14F;
+    localparam logic [10:0] OPCODE_GETILEN = 11'h0FE;
 
     typedef enum logic [1:0] {
         ST_IDLE      = 2'b00,

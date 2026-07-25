@@ -27,7 +27,7 @@
   - [x] 实现 FENCE 指令作为显式内存屏障
 
 - [x] Task 5: 实现 GETILEN 辅助指令 (rtl/core/getilen.sv)
-  - [x] 格式：GETILEN.IMM Rd, [address]，操作码 0x14F
+  - [x] 格式：GETILEN.IMM Rd, [address]，操作码 0x0FE（厂商自定义区）
   - [x] 读取目标地址首字节的 bit[7:6]，返回指令长度到 Rd
   - [x] 目标地址不可读时触发数据缺页异常，异常地址为操作数地址
 

@@ -1299,9 +1299,11 @@ MISC-2000 是一款高性能 CISC 架构处理器，集成了整数运算、浮�
 
 ### 3.8 厂商全自定义区 (Fully Custom) — 编码范围 0xE0–0xFF
 
-| 范围 | 说明 |
-|------|------|
-| 0xE0–0xFF | 完全由厂商自定义。可用于自定义加速器、扩展指令、调试/诊断微操作等。MISC-R 规范不对此区域做任何限制。 |
+| 助记符 | 编码 | 说明 |
+|--------|------|------|
+| **GETILEN** | 0x0FE | 获取指令长度 (Get Instruction Length)：读取目标地址首字节的 bit[7:6]，返回指令长度（2/4/6/8）到目标寄存器，不执行目标指令 |
+| — | 0xE0–0xFD | 保留 (Reserved) |
+| — | 0xFF | 保留 (Reserved) |
 
 ---
 
@@ -2602,9 +2604,11 @@ All instructions use fixed-length encoding. Mnemonics use `.` delimited suffixes
 
 ### 3.8 Vendor Fully Custom — Encoding Range 0xE0–0xFF
 
-| Range | Description |
-|-------|-------------|
-| 0xE0–0xFF | Fully vendor-customizable. May be used for custom accelerators, extension instructions, debug/diagnostic micro-ops, etc. The MISC-R specification imposes no restrictions on this region. |
+| Mnemonic | Encoding | Description |
+|----------|----------|-------------|
+| **GETILEN** | 0x0FE | Get Instruction Length: Reads bit[7:6] of the first byte at target address, returns instruction length (2/4/6/8) to destination register without executing the target instruction |
+| — | 0xE0–0xFD | Reserved |
+| — | 0xFF | Reserved |
 
 ---
 

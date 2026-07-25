@@ -7,7 +7,7 @@ MISC-2000 采用变长 CISC 指令集（2/4/6/8 字节），需要专用的取�
 - 新增变长指令取指单元（Instruction Fetch Unit），支持 2/4/6/8 字节指令
 - 新增异常与长度管理模块，含 CSR_ILLEN 寄存器
 - 新增原子指令支持（LL/SC/CAS），禁止跨页
-- 新增 GETILEN 辅助指令（操作码 0x14F）硬件实现
+- 新增 GETILEN 辅助指令（操作码 0x0FE，厂商自定义区）硬件实现
 - 新增 CSR 模块（CSR_ILLEN、CSR_EPC 等）
 - 新增仿真测试用例
 
@@ -72,7 +72,7 @@ LL 指令 SHALL 记录 64 字节对齐的独占监视区域。异常、中断或
 - **THEN** 写入失败，返回非零值
 
 ### Requirement: GETILEN 辅助指令
-GETILEN.IMM 指令（操作码 0x14F）SHALL 读取目标地址的首字节，根据 bit[7:6] 返回指令长度到 Rd（不执行目标指令）。若目标地址不可读，触发常规数据缺页异常，异常地址为 GETILEN 的操作数地址。
+GETILEN.IMM 指令（操作码 0x0FE，厂商自定义区）SHALL 读取目标地址的首字节，根据 bit[7:6] 返回指令长度到 Rd（不执行目标指令）。若目标地址不可读，触发常规数据缺页异常，异常地址为 GETILEN 的操作数地址。
 
 #### Scenario: GETILEN 正常执行
 - **WHEN** 执行 GETILEN.IMM Rd, [addr]，地址内容 bit[7:6] = 10

@@ -276,7 +276,7 @@ module tb_getilen;
 
         // =================================================================
         // Test 1: GETILEN reads 2-byte instruction length
-        //   - opcode = 0x14F, target_addr = 0x1000
+        //   - opcode = 0x0FE (vendor zone), target_addr = 0x1000
         //   - Memory returns 0x00 at 0x1000 (bit[7:6]=00 → 2B)
         //   - Verify result_o = 2, result_valid_o = 1, no exception
         // =================================================================
