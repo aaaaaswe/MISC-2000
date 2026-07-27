@@ -12,7 +12,7 @@ module tb_getilen;
     // -------------------------------------------------------------------------
     localparam CLK_PERIOD = 10;   // 10 ns clock period
 
-    localparam logic [10:0] OPCODE_GETILEN = 11'h14F;
+    localparam logic [10:0] OPCODE_GETILEN = 11'h0FE;
     localparam logic [63:0] PAGE_FAULT_ADDR = 64'hF000;
 
     // -------------------------------------------------------------------------

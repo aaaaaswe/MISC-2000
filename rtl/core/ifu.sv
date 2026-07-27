@@ -225,13 +225,12 @@ module misc_ifu #(
                 end
 
                 DONE: begin
-                    fetch_req_o   <= 1'b0;
-                    instr_valid_o <= 1'b1;
                     instr_o       <= instr_buffer;
                     instr_len_o   <= {1'b0, instr_len_enc};
                     next_pc_o     <= instr_start_addr + ADDR_WIDTH'({instr_len_enc, 1'b0} + 3'd2);
 
                     if (!stall_i) begin
+                        // Pipeline accepts this instruction — advance to next fetch
                         instr_valid_o    <= 1'b0;
                         fetch_req_o      <= 1'b1;
                         fetch_addr_reg   <= pc_i;
@@ -241,6 +240,10 @@ module misc_ifu #(
                         total_bytes_needed <= 4'd0;
                         instr_len_enc    <= 2'b00;
                         state            <= FETCH_FIRST;
+                    end else begin
+                        // Hold valid instruction until pipeline accepts it
+                        fetch_req_o   <= 1'b0;
+                        instr_valid_o <= 1'b1;
                     end
                 end
 

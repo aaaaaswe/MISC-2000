@@ -143,6 +143,11 @@ module misc_decoder (
             inst_class_o  = CLASS_SIMD;
             addr_mode_o   = ADDR_REG;
             data_type_o   = (opcode_i - 11'h700) % 5;
+
+        end else if (opcode_i >= 11'h800 && opcode_i <= 11'h9FF) begin
+            is_valid_o    = 1'b1;
+            inst_class_o  = CLASS_SYSTEM;
+            addr_mode_o   = ADDR_IMM;
         end
     end
 
