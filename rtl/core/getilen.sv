@@ -11,7 +11,7 @@ module misc_getilen #(
     input  logic                         rst_n_i,
 
     // Instruction decode interface
-    input  logic [10:0]                  opcode_i,
+    input  logic [11:0]                  opcode_i,
     input  logic [4:0]                   rd_addr_i,
     input  logic [ADDR_WIDTH-1:0]        target_addr_i,
     input  logic                         instr_valid_i,
@@ -34,7 +34,7 @@ module misc_getilen #(
 );
 
     // Local parameters
-    localparam logic [10:0] OPCODE_GETILEN = 11'h0FE;
+    localparam logic [11:0] OPCODE_GETILEN = 12'h0FE;
 
     typedef enum logic [1:0] {
         ST_IDLE      = 2'b00,
@@ -58,7 +58,7 @@ module misc_getilen #(
 
     // Instruction length decoding helper
     function automatic logic [DATA_WIDTH-1:0] decode_length(input logic [7:0] byte_val);
-        unique case (byte_val[7:6])
+        case (byte_val[7:6])
             2'b00:   decode_length = {{(DATA_WIDTH-2){1'b0}}, 2'd2};
             2'b01:   decode_length = {{(DATA_WIDTH-3){1'b0}}, 3'd4};
             2'b10:   decode_length = {{(DATA_WIDTH-3){1'b0}}, 3'd6};
@@ -68,7 +68,7 @@ module misc_getilen #(
     endfunction
 
     // State machine (sequential)
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= ST_IDLE;
             addr_q           <= {ADDR_WIDTH{1'b0}};
@@ -103,9 +103,9 @@ module misc_getilen #(
         end
     end
 
-    always_comb begin
+    always @(*) begin
         state_next = state_q;
-        unique case (state_q)
+        case (state_q)
             ST_IDLE: begin
                 if (is_getilen)
                     state_next = ST_WAIT_READ;

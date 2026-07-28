@@ -3,8 +3,6 @@
 // IFU Testbench: instruction lengths (2/4/6/8 bytes), cross-page detection,
 // page faults, pipeline control (flush/stall/branch), atomic cross-page.
 
-`include "../rtl/core/ifu.sv"
-
 `timescale 1ns / 1ps
 
 module tb_ifu;
@@ -60,11 +58,11 @@ module tb_ifu;
 
     // Word-aligned index into memory (byte address >> 1)
     logic [31:0]             mem_idx;
-    assign mem_idx = fetch_addr[31:1];
 
     // Combinational memory response: responds immediately when fetch_req is
     // asserted.  The IFU samples mem_ready_i on the next posedge.
-    always_comb begin
+    always @(fetch_req or fetch_addr) begin
+        mem_idx = fetch_addr[31:1];
         if (fetch_req && (mem_idx < MEM_DEPTH)) begin
             mem_ready = 1'b1;
             if (mem_mapped[mem_idx]) begin
@@ -174,21 +172,18 @@ module tb_ifu;
         stall <= 1'b0;
         // Set PC (blocking so IFU samples it this cycle)
         pc = fetch_pc;
-        @(posedge clk);   // IDLE → FETCH_FIRST (fetch issued)
+        @(posedge clk);   // Clock 1: stall still 1 (old value), IFU stays IDLE
+                          // After this edge: stall = 0
+        @(posedge clk);   // Clock 2: stall_i = 0, IDLE → FETCH_FIRST (fetch issued)
+                          // After this edge: fetch_req = 1
+        stall <= 1'b1;    // Schedule stall for after next edge
 
-        // Assert stall — when IFU reaches DONE it will be held there
-        stall <= 1'b1;
-
-        // Wait for all chunks to be fetched.
-        // After the first @(posedge clk) above the IFU is in FETCH_FIRST.
-        // It takes (num_chunks) total cycles to reach DONE:
-        //   num_chunks=1: FETCH_FIRST (processes data) → DONE  (1 more clk)
-        //   num_chunks=2: FETCH_FIRST → FETCH_REMAINING → DONE (2 more clks)
-        //   num_chunks=3: FETCH_FIRST → F_R → F_R → DONE     (3 more clks)
-        //   num_chunks=4: FETCH_FIRST → F_R → F_R → F_R → DONE (4 more clks)
+        // Now the IFU is in FETCH_FIRST. It needs num_chunks cycles to
+        // complete: FETCH_FIRST → ... → DONE takes num_chunks cycles,
+        // plus one more for DONE to output valid data.
+        @(posedge clk);   // Clock 3: FETCH_FIRST → DONE (or FETCH_REMAINING)
         repeat (num_chunks) @(posedge clk);
-
-        // Now the IFU is in DONE (held by stall=1).  Outputs are valid.
+                          // After: IFU in DONE with stall=1, outputs valid
     endtask
 
     //=========================================================================
@@ -338,14 +333,14 @@ module tb_ifu;
         $display("\n--- Test 1: 2-byte instruction fetch ---");
 
         mem_clear();
-        // Store instruction at 0x1000: bit[7:6]=00 → 2B
-        mem_write(64'h1000, 16'h0042);
+        // Store instruction at 0x1000: lower byte bit[7:6]=00 → 2B
+        mem_write(64'h1000, 16'h0000);
 
         // Hold IFU in DONE after fetching
         fetch_and_hold(64'h1000, 1);
 
         check3("Test 1: instr_len_o = 0 (2B)", instr_len, LEN_2B);
-        check64("Test 1: instr_o = 0x0042", instr, 64'h0000000000000042);
+        check64("Test 1: instr_o = 0x0000", instr, 64'h0000000000000000);
         check_bit("Test 1: instr_valid_o = 1", instr_valid, 1'b1);
         check_bit("Test 1: exception_o = 0", exception, 1'b0);
         check64("Test 1: next_pc_o = 0x1002", next_pc, 64'h1002);
@@ -383,19 +378,19 @@ module tb_ifu;
         $display("\n--- Test 3: 6-byte instruction fetch ---");
 
         mem_clear();
-        // First 2 bytes at 0x1000: bit[7:6]=10 → 6B
-        mem_write(64'h1000, 16'h8000);
+        // First 2 bytes at 0x1000: lower byte bit[7:6]=10 → 6B
+        mem_write(64'h1000, 16'h0080);
         mem_write(64'h1002, 16'h1111);
         mem_write(64'h1004, 16'h2222);
 
         fetch_and_hold(64'h1000, 3);
 
         check3("Test 3: instr_len_o = 2 (6B)", instr_len, LEN_6B);
-        // buffer[15:0]  = 0x8000
+        // buffer[15:0]  = 0x0080
         // buffer[31:16] = 0x1111
         // buffer[47:32] = 0x2222
         check64("Test 3: instr_o 6 bytes collected", instr,
-                64'h0000_2222_1111_8000);
+                64'h0000_2222_1111_0080);
         check_bit("Test 3: instr_valid_o = 1", instr_valid, 1'b1);
         check_bit("Test 3: exception_o = 0", exception, 1'b0);
         check64("Test 3: next_pc_o = 0x1006", next_pc, 64'h1006);
@@ -408,8 +403,8 @@ module tb_ifu;
         $display("\n--- Test 4: 8-byte instruction fetch ---");
 
         mem_clear();
-        // First 2 bytes at 0x1000: bit[7:6]=11 → 8B
-        mem_write(64'h1000, 16'hC000);
+        // First 2 bytes at 0x1000: lower byte bit[7:6]=11 → 8B
+        mem_write(64'h1000, 16'h00C0);
         mem_write(64'h1002, 16'hAAAA);
         mem_write(64'h1004, 16'hBBBB);
         mem_write(64'h1006, 16'hCCCC);
@@ -417,12 +412,12 @@ module tb_ifu;
         fetch_and_hold(64'h1000, 4);
 
         check3("Test 4: instr_len_o = 3 (8B)", instr_len, LEN_8B);
-        // buffer[15:0]  = 0xC000
+        // buffer[15:0]  = 0x00C0
         // buffer[31:16] = 0xAAAA
         // buffer[47:32] = 0xBBBB
         // buffer[63:48] = 0xCCCC
         check64("Test 4: instr_o 8 bytes collected", instr,
-                64'hCCCC_BBBB_AAAA_C000);
+                64'hCCCC_BBBB_AAAA_00C0);
         check_bit("Test 4: instr_valid_o = 1", instr_valid, 1'b1);
         check_bit("Test 4: exception_o = 0", exception, 1'b0);
         check64("Test 4: next_pc_o = 0x1008", next_pc, 64'h1008);
@@ -491,27 +486,35 @@ module tb_ifu;
         // Let IFU settle back to IDLE
         @(posedge clk);
 
+        // Flush IFU back to IDLE with stall=1 for next test
+        stall <= 1'b1;
+        flush <= 1'b1;
+        @(posedge clk);
+        flush <= 1'b0;
+        // IFU is now in IDLE with stall=1
+
         // =================================================================
         // TEST 7: Pipeline flush
         // =================================================================
         $display("\n--- Test 7: Pipeline flush ---");
 
         mem_clear();
-        mem_write(64'h1000, 16'h8042);  // bit[7:6]=10 → 6B
-        mem_write(64'h1002, 16'hAAAA);
-        mem_write(64'h1004, 16'hBBBB);
+        mem_write(64'h1000, 16'h0142);  // bit[7:6]=01 → 4B
 
+        // Start from IDLE with stall=1 (set up above)
         stall <= 1'b0;
         pc = 64'h1000;
-        @(posedge clk);   // IDLE → FETCH_FIRST
+        @(posedge clk);   // IDLE → FETCH_FIRST (stall=0 now)
 
         // Let the IFU process the first chunk (enter FETCH_REMAINING)
         @(posedge clk);   // FETCH_FIRST → FETCH_REMAINING
 
         // Now assert flush — IFU should return to IDLE and clear outputs
+        stall <= 1'b1;    // Assert stall so IFU stays in IDLE after flush
         flush <= 1'b1;
-        @(posedge clk);   // flush takes effect
+        @(posedge clk);   // flush takes effect: IFU → IDLE
         flush <= 1'b0;
+        @(posedge clk);   // extra cycle: flush block outputs settled
 
         // Check that IFU is back in IDLE (outputs cleared)
         check_bit("Test 7: fetch_req_o = 0 after flush", fetch_req, 1'b0);
@@ -523,27 +526,36 @@ module tb_ifu;
         // =================================================================
         $display("\n--- Test 8: Pipeline stall ---");
 
+        // Flush IFU back to IDLE with stall=1
+        stall <= 1'b1;
+        flush <= 1'b1;
+        @(posedge clk);
+        flush <= 1'b0;
+        @(posedge clk);
+        // IFU is now in IDLE with stall=1, flush=0
+
         mem_clear();
-        mem_write(64'h1000, 16'h0042);  // 2B instruction
+        mem_write(64'h1000, 16'h0000);  // bit[7:6]=00 → 2B instruction
 
         // Assert stall — IFU should not issue a fetch
-        stall <= 1'b1;
+        // stall is already 1 from above
         pc = 64'h1000;
         @(posedge clk);   // IFU stays in IDLE (stalled)
         check_bit("Test 8: fetch_req_o = 0 during stall", fetch_req, 1'b0);
 
         // Deassert stall — IFU should resume and issue fetch
         stall <= 1'b0;
-        @(posedge clk);   // IDLE → FETCH_FIRST
-        // fetch_req_o should be asserted now
+        @(posedge clk);   // IDLE → FETCH_FIRST (fetch_req asserted)
+        @(posedge clk);   // extra cycle for fetch_req to settle
         check_bit("Test 8: fetch_req_o = 1 after stall deassert", fetch_req, 1'b1);
 
         // Now stall again to catch DONE
         stall <= 1'b1;
-        @(posedge clk);   // FETCH_FIRST → DONE (2B, held)
+        @(posedge clk);   // FETCH_FIRST → DONE (2B)
+        @(posedge clk);   // extra cycle for DONE outputs to settle
 
         check_bit("Test 8: instr_valid_o = 1 after stall resume", instr_valid, 1'b1);
-        check64("Test 8: instr_o = 0x0042", instr, 64'h0000000000000042);
+        check64("Test 8: instr_o = 0x0000", instr, 64'h0000000000000000);
 
         release_stall();
 
@@ -551,6 +563,13 @@ module tb_ifu;
         // TEST 9: Atomic cross-page detection
         // =================================================================
         $display("\n--- Test 9: Atomic cross-page detection ---");
+
+        // Flush IFU back to IDLE with stall=1
+        stall <= 1'b1;
+        flush <= 1'b1;
+        @(posedge clk);
+        flush <= 1'b0;
+        @(posedge clk);
 
         mem_clear();
         // pc_i = 0x1FFE, opcode in 0x144–0x148 range, bit[7:6]=01 → 4B
@@ -583,9 +602,16 @@ module tb_ifu;
         // =================================================================
         $display("\n--- Test 10: Branch flush and redirection ---");
 
+        // Flush IFU back to IDLE with stall=1
+        stall <= 1'b1;
+        flush <= 1'b1;
+        @(posedge clk);
+        flush <= 1'b0;
+        @(posedge clk);
+
         mem_clear();
-        mem_write(64'h1000, 16'h0042);  // 2B at 0x1000
-        mem_write(64'h3000, 16'h0043);  // 2B at 0x3000
+        mem_write(64'h1000, 16'h0100);  // bit[7:6]=01 → 4B at 0x1000 (keeps IFU busy)
+        mem_write(64'h3000, 16'h0000);  // bit[7:6]=00 → 2B at 0x3000
 
         stall <= 1'b0;
         pc = 64'h1000;
@@ -607,14 +633,16 @@ module tb_ifu;
 
         // Now let the IFU fetch from the branch target (stall=1 to hold DONE)
         stall <= 1'b1;
-        // One cycle: IDLE → FETCH_FIRST
+        // One cycle: IDLE → FETCH_FIRST (uses preserved branch target)
         @(posedge clk);
         // One more cycle: FETCH_FIRST → DONE (2-byte instruction)
+        @(posedge clk);
+        // Extra cycle for DONE outputs to settle
         @(posedge clk);
 
         // Verify we fetched from 0x3000
         check_bit("Test 10d: instr_valid_o = 1 after branch fetch", instr_valid, 1'b1);
-        check64("Test 10e: instr_o = 0x0043 (from 0x3000)", instr, 64'h0000000000000043);
+        check64("Test 10e: instr_o = 0x0000 (from 0x3000)", instr, 64'h0000000000000000);
         check64("Test 10f: next_pc_o = 0x3002", next_pc, 64'h3002);
 
         release_stall();

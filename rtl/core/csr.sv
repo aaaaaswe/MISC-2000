@@ -66,7 +66,7 @@ module misc_csr #(
 
     // ILLEN decode: encoded 0->2B, 1->4B, 2->6B, 3->8B
     function automatic logic [15:0] decode_ilen(input logic [2:0] encoded);
-        unique case (encoded)
+        case (encoded)
             3'd0: decode_ilen = 16'd2;
             3'd1: decode_ilen = 16'd4;
             3'd2: decode_ilen = 16'd6;
@@ -79,10 +79,10 @@ module misc_csr #(
     assign sc_success_o = sc_exec_i & monitor_valid;
 
     // CSR read multiplexer
-    always_comb begin
+    always @(*) begin
         csr_rdata_o = {DATA_WIDTH{1'b0}};
         if (csr_ren_i) begin
-            unique case (csr_addr_i)
+            case (csr_addr_i)
                 CSR_EPC:           csr_rdata_o = { {(DATA_WIDTH-ADDR_WIDTH){1'b0}}, mepc };
                 CSR_ILLEN:         csr_rdata_o = { {(DATA_WIDTH-16){1'b0}}, millen };
                 CSR_ECAUSE:        csr_rdata_o = { {(DATA_WIDTH-4){1'b0}}, mecause };
@@ -95,7 +95,7 @@ module misc_csr #(
         end
     end
 
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             mepc          <= {ADDR_WIDTH{1'b0}};
             millen        <= 16'd0;
@@ -114,7 +114,7 @@ module misc_csr #(
             end
 
             if (csr_wen_i) begin
-                unique case (csr_addr_i)
+                case (csr_addr_i)
                     CSR_EPC:           mepc    <= csr_wdata_i[ADDR_WIDTH-1:0];
                     CSR_ILLEN:         millen  <= csr_wdata_i[15:0];
                     CSR_ECAUSE:        mecause <= csr_wdata_i[3:0];

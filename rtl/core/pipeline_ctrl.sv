@@ -5,7 +5,7 @@
 module misc_pipeline_ctrl #(
     parameter int DATA_WIDTH   = 64,
     parameter int ADDR_WIDTH   = 64,
-    parameter int OPCODE_WIDTH = 11
+    parameter int OPCODE_WIDTH = 12
 ) (
     // Clock and reset
     input  logic                         clk_i,
@@ -125,7 +125,7 @@ module misc_pipeline_ctrl #(
     logic        decode_mem_read;
     logic        decode_mem_write;
 
-    always_comb begin
+    always @(*) begin
         decode_rs1_addr  = 5'd0;
         decode_rs2_addr  = 5'd0;
         decode_rd_addr   = 5'd0;
@@ -134,7 +134,7 @@ module misc_pipeline_ctrl #(
         decode_mem_read  = 1'b0;
         decode_mem_write = 1'b0;
 
-        if (fd_opcode >= 11'h100 && fd_opcode <= 11'h1FF) begin
+        if (fd_opcode >= 12'h100 && fd_opcode <= 12'h1FF) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
@@ -142,41 +142,41 @@ module misc_pipeline_ctrl #(
             decode_mem_write =  fd_opcode[5];
             decode_reg_write = ~fd_opcode[5];
 
-        end else if (fd_opcode >= 11'h200 && fd_opcode <= 11'h407) begin
+        end else if (fd_opcode >= 12'h200 && fd_opcode <= 12'h407) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
             decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
 
-        end else if (fd_opcode >= 11'h408 && fd_opcode <= 11'h4EF) begin
+        end else if (fd_opcode >= 12'h408 && fd_opcode <= 12'h4EF) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
             decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
 
-        end else if (fd_opcode >= 11'h500 && fd_opcode <= 11'h62B) begin
+        end else if (fd_opcode >= 12'h500 && fd_opcode <= 12'h62B) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
             decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
 
-        end else if (fd_opcode >= 11'h62C && fd_opcode <= 11'h6FF) begin
+        end else if (fd_opcode >= 12'h62C && fd_opcode <= 12'h6FF) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = 5'd0;
 
-        end else if ((fd_opcode >= 11'h700 && fd_opcode <= 11'h7BF) ||
-                     (fd_opcode >= 11'h7D0 && fd_opcode <= 11'h7FF)) begin
+        end else if ((fd_opcode >= 12'h700 && fd_opcode <= 12'h7BF) ||
+                     (fd_opcode >= 12'h7D0 && fd_opcode <= 12'h7FF)) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
             decode_alu_op    = fd_opcode[5:0];
             decode_reg_write = 1'b1;
 
-        end else if (fd_opcode >= 11'h7C0 && fd_opcode <= 11'h7CF) begin
+        end else if (fd_opcode >= 12'h7C0 && fd_opcode <= 12'h7CF) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];
@@ -197,7 +197,7 @@ module misc_pipeline_ctrl #(
     assign flush_active = flush_i || branch_taken_i;
     assign stall_active = stall_i && !flush_active;
 
-    always_comb begin
+    always @(*) begin
         if (!rst_n_i)
             next_state = STATE_IDLE;
         else if (flush_active)
@@ -210,7 +210,7 @@ module misc_pipeline_ctrl #(
 
     assign advance_pipe = (next_state == STATE_RUNNING);
 
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i)
             pipeline_state_o <= STATE_IDLE;
         else
@@ -222,7 +222,7 @@ module misc_pipeline_ctrl #(
 
     assign next_pc_o = branch_taken_i ? branch_target_i : (pc_i + {{ADDR_WIDTH-3}{1'b0}, 3'd4});
 
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             fd_pc         <= '0;
             fd_opcode     <= '0;
@@ -354,7 +354,7 @@ module misc_pipeline_ctrl #(
     assign mem_write_o = em_mem_write && em_valid;
     assign mem_wdata_o = em_mem_wdata;
 
-    assign result_o = (mw_valid && (mw_opcode >= 11'h100 && mw_opcode <= 11'h1FF && !mw_opcode[5]))
+    assign result_o = (mw_valid && (mw_opcode >= 12'h100 && mw_opcode <= 12'h1FF && !mw_opcode[5]))
                       ? mw_mem_rdata
                       : mw_alu_result;
 

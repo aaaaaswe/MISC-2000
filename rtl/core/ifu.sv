@@ -75,13 +75,32 @@ module misc_ifu #(
     logic [1:0] instr_len_enc;      // 0,1,2,3 → 2,4,6,8 bytes
     logic [3:0] bytes_fetched;
     logic [3:0] total_bytes_needed;
+    logic       branch_target_valid;
 
     // Combinational helpers
     logic fetching_active;
     assign fetching_active = (state == FETCH_FIRST) || (state == FETCH_REMAINING);
 
+    // Decode instruction length from first 2-byte chunk
+    // mem_rdata_i[7:6]: 00=2B, 01=4B, 10=6B, 11=8B
+    wire [1:0] decoded_len;
+    wire [3:0] decoded_total_bytes;
+    wire       is_2byte;
+    wire       is_atomic_4byte;
+
+    assign decoded_len         = mem_rdata_i[7:6];
+    assign decoded_total_bytes = (mem_rdata_i[7:6] + 2'd1) * 4'd2;
+    assign is_2byte            = (mem_rdata_i[7:6] == 2'b00);
+
+    // Atomic 4-byte instructions: opcodes 0x040, 0x041, 0x144-0x148
+    assign is_atomic_4byte = (mem_rdata_i[7:6] == 2'b01) &&
+                              ((mem_rdata_i[10:0] == 11'h040) ||
+                               (mem_rdata_i[10:0] == 11'h041) ||
+                               ((mem_rdata_i[10:0] >= 11'h144) &&
+                                (mem_rdata_i[10:0] <= 11'h148)));
+
     // State machine + registers
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state            <= IDLE;
             fetch_addr_reg   <= '0;
@@ -90,6 +109,7 @@ module misc_ifu #(
             instr_len_enc    <= 2'b00;
             bytes_fetched    <= 4'd0;
             total_bytes_needed <= 4'd0;
+            branch_target_valid <= 1'b0;
 
             fetch_req_o        <= 1'b0;
             instr_valid_o      <= 1'b0;
@@ -99,7 +119,6 @@ module misc_ifu #(
             exception_o        <= 1'b0;
             exception_cause_o  <= EXC_PAGE_FAULT;
             exception_addr_o   <= '0;
-
         end else if (flush_i || branch_taken_i) begin
             state            <= IDLE;
             fetch_addr_reg   <= branch_taken_i ? branch_target_i : '0;
@@ -108,6 +127,7 @@ module misc_ifu #(
             instr_len_enc    <= 2'b00;
             bytes_fetched    <= 4'd0;
             total_bytes_needed <= 4'd0;
+            branch_target_valid <= branch_taken_i;
 
             fetch_req_o        <= 1'b0;
             instr_valid_o      <= 1'b0;
@@ -116,15 +136,19 @@ module misc_ifu #(
         end else begin
             exception_o <= 1'b0;
 
-            unique case (state)
+            case (state)
 
                 IDLE: begin
                     instr_valid_o <= 1'b0;
 
                     if (!stall_i) begin
                         fetch_req_o      <= 1'b1;
-                        fetch_addr_reg   <= pc_i;
-                        instr_start_addr <= pc_i;
+                        if (branch_target_valid) begin
+                            branch_target_valid <= 1'b0;
+                        end else begin
+                            fetch_addr_reg   <= pc_i;
+                            instr_start_addr <= pc_i;
+                        end
                         instr_buffer     <= '0;
                         bytes_fetched    <= 4'd0;
                         total_bytes_needed <= 4'd0;
@@ -151,22 +175,10 @@ module misc_ifu #(
                         end else begin
                             instr_buffer[15:0] <= mem_rdata_i;
                             bytes_fetched      <= 4'd2;
+                            instr_len_enc      <= decoded_len;
+                            total_bytes_needed <= decoded_total_bytes;
 
-                            unique case (mem_rdata_i[7:6])
-                                2'b00: instr_len_enc <= 2'b00;
-                                2'b01: instr_len_enc <= 2'b01;
-                                2'b10: instr_len_enc <= 2'b10;
-                                2'b11: instr_len_enc <= 2'b11;
-                            endcase
-
-                            total_bytes_needed <= 4'd2 + {2'b00, mem_rdata_i[7:6], 1'b0};
-
-                            if ((mem_rdata_i[7:6] == 2'b01) &&
-                                ((mem_rdata_i[10:0] == 11'h040) ||
-                                 (mem_rdata_i[10:0] == 11'h041) ||
-                                 ((mem_rdata_i[10:0] >= 11'h144) &&
-                                  (mem_rdata_i[10:0] <= 11'h148)))) begin
-
+                            if (is_atomic_4byte) begin
                                 if ((instr_start_addr[11:0] + 13'd4) >= PAGE_SIZE) begin
                                     exception_o        <= 1'b1;
                                     exception_cause_o  <= EXC_ATOMIC_CROSS_PAGE;
@@ -179,7 +191,7 @@ module misc_ifu #(
                                     state          <= FETCH_REMAINING;
                                 end
 
-                            end else if (mem_rdata_i[7:6] == 2'b00) begin
+                            end else if (is_2byte) begin
                                 fetch_req_o <= 1'b0;
                                 state       <= DONE;
 
@@ -205,10 +217,10 @@ module misc_ifu #(
                             state              <= IDLE;
 
                         end else begin
-                            unique case (bytes_fetched[2:0])
-                                3'd2: instr_buffer[31:16] <= mem_rdata_i;
-                                3'd4: instr_buffer[47:32] <= mem_rdata_i;
-                                3'd6: instr_buffer[63:48] <= mem_rdata_i;
+                            case (bytes_fetched)
+                                4'd2:  instr_buffer[31:16] <= mem_rdata_i;
+                                4'd4:  instr_buffer[47:32] <= mem_rdata_i;
+                                4'd6:  instr_buffer[63:48] <= mem_rdata_i;
                                 default: ;
                             endcase
 
@@ -228,10 +240,9 @@ module misc_ifu #(
                     instr_o       <= instr_buffer;
                     instr_len_o   <= {1'b0, instr_len_enc};
                     next_pc_o     <= instr_start_addr + ADDR_WIDTH'({instr_len_enc, 1'b0} + 3'd2);
+                    instr_valid_o <= 1'b1;
 
                     if (!stall_i) begin
-                        // Pipeline accepts this instruction — advance to next fetch
-                        instr_valid_o    <= 1'b0;
                         fetch_req_o      <= 1'b1;
                         fetch_addr_reg   <= pc_i;
                         instr_start_addr <= pc_i;
@@ -241,9 +252,7 @@ module misc_ifu #(
                         instr_len_enc    <= 2'b00;
                         state            <= FETCH_FIRST;
                     end else begin
-                        // Hold valid instruction until pipeline accepts it
                         fetch_req_o   <= 1'b0;
-                        instr_valid_o <= 1'b1;
                     end
                 end
 

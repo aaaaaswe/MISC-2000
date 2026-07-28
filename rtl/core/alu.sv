@@ -55,7 +55,7 @@ module misc_alu (
     logic [ 5:0] msb_pos;          // MSB index for active data width
     logic [ 5:0] shift_amt;        // limited shift amount (0..msb_pos)
 
-    always_comb begin
+    always @(*) begin
         case (data_width_i)
             3'd0: begin  // Byte
                 data_mask = 64'h0000_0000_0000_00FF;
@@ -83,7 +83,7 @@ module misc_alu (
     assign op_b_m = op_b_i & data_mask;
 
     // Limit shift amount to data width (0..msb_pos)
-    always_comb begin
+    always @(*) begin
         case (data_width_i)
             3'd0:    shift_amt = {3'd0, op_b_i[2:0]};
             3'd1:    shift_amt = {2'd0, op_b_i[3:0]};
@@ -97,7 +97,7 @@ module misc_alu (
         logic [63:0] result;
         logic sign_bit;
         result = val & data_mask;
-        unique case (data_width_i)
+        case (data_width_i)
             3'd0: begin sign_bit = val[7]; result[63:7] = {57{sign_bit}}; end
             3'd1: begin sign_bit = val[15]; result[63:15] = {49{sign_bit}}; end
             3'd2: begin sign_bit = val[31]; result[63:31] = {33{sign_bit}}; end
@@ -116,14 +116,7 @@ module misc_alu (
     logic [ 63:0] div_quotient;       // division quotient
     logic [ 63:0] div_remainder;      // division remainder (modulo)
 
-    // Sign-extended operands for signed operations
-    logic signed [63:0] op_a_sext;
-    logic signed [63:0] op_b_sext;
-
-    always_comb begin
-        op_a_sext = $signed(sext_active(op_a_i));
-        op_b_sext = $signed(sext_active(op_b_i));
-    end
+    // Sign-extended operands for signed operations (computed in main block)
 
     // Extended add/sub for carry/borrow detection
     logic [64:0] add_ext;   // 65-bit add with carry
@@ -216,11 +209,16 @@ module misc_alu (
 
     // Main ALU operation
     always @(*) begin
+        logic signed [63:0] op_a_sext;
+        logic signed [63:0] op_b_sext;
+        op_a_sext = $signed(sext_active(op_a_i));
+        op_b_sext = $signed(sext_active(op_b_i));
+
         raw_result   = 64'd0;
         raw_overflow = 1'b0;
         raw_carry    = 1'b0;
 
-        unique case (alu_op_i)
+        case (alu_op_i)
             OP_ADD: begin
                 raw_result   = add_ext[63:0];
                 raw_carry    = add_carry;

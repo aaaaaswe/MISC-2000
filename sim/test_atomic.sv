@@ -3,9 +3,6 @@
 // Atomic Instruction Testbench: tests LL.D, SC.D, CAS.D, cross-page detection,
 // FENCE, and page-fault handling.
 
-`include "../rtl/core/atomic.sv"
-`include "../rtl/core/csr.sv"
-
 `timescale 1ns / 1ps
 
 module tb_atomic;
@@ -20,10 +17,10 @@ module tb_atomic;
     // =========================================================================
     // Opcode Constants
     // =========================================================================
-    localparam logic [10:0] OP_LL_D    = 11'h040;
-    localparam logic [10:0] OP_SC_D    = 11'h041;
-    localparam logic [10:0] OP_CAS_IMM = 11'h144;
-    localparam logic [10:0] OP_FENCE   = 11'h15E;
+    localparam logic [11:0] OP_LL_D    = 12'h040;
+    localparam logic [11:0] OP_SC_D    = 12'h041;
+    localparam logic [11:0] OP_CAS_IMM = 12'h144;
+    localparam logic [11:0] OP_FENCE   = 12'h15E;
 
     // =========================================================================
     // CSR Address Constants
@@ -36,7 +33,7 @@ module tb_atomic;
     // =========================================================================
     logic                       clk;
     logic                       rst_n;
-    logic [10:0]                opcode;
+    logic [11:0]                opcode;
     logic [4:0]                 rd_addr;
     logic [4:0]                 rs1_addr;
     logic [4:0]                 rs2_addr;
@@ -75,9 +72,15 @@ module tb_atomic;
     logic [DATA_WIDTH-1:0]      csr_rdata;
 
     // =========================================================================
-    // Memory Model
+    // Memory Model — Content-Addressable Lookup Table
     // =========================================================================
-    logic [DATA_WIDTH-1:0]      mem_array [logic [ADDR_WIDTH-1:0]];
+    localparam int NUM_MEM_ENTRIES = 32;
+
+    logic [ADDR_WIDTH-1:0]      mem_addr_store [0:NUM_MEM_ENTRIES-1];
+    logic [DATA_WIDTH-1:0]      mem_data_store [0:NUM_MEM_ENTRIES-1];
+    logic                       mem_entry_used [0:NUM_MEM_ENTRIES-1];
+    int                         mem_num_entries;
+
     logic                       mem_responding;  // flag: memory is handling a request
     logic [ADDR_WIDTH-1:0]      mem_req_addr;
     logic                       mem_req_is_write;
@@ -98,6 +101,7 @@ module tb_atomic;
 
     // Pulse capture flags — latch rising edges of pulsed outputs
     logic                       ll_exec_captured;
+    logic [ADDR_WIDTH-1:0]      ll_addr_captured;
     logic                       sc_exec_captured;
     logic                       fence_exec_captured;
 
@@ -170,15 +174,56 @@ module tb_atomic;
         .ll_addr_i        (ll_addr),
         .sc_exec_i        (sc_exec),
         .sc_success_o     (sc_success),
-        .monitor_clear_i  (1'b0)
+        .monitor_clear_i  (monitor_clear)
     );
 
     // =========================================================================
     // Memory Model Logic
     // =========================================================================
+    // Helper functions for content-addressable memory lookup
+    function automatic logic [DATA_WIDTH-1:0] mem_read_lut(input logic [ADDR_WIDTH-1:0] addr);
+        int i;
+        for (i = 0; i < NUM_MEM_ENTRIES; i++) begin
+            if (mem_entry_used[i] && (mem_addr_store[i] == addr))
+                return mem_data_store[i];
+        end
+        return '0;
+    endfunction
+
+    function automatic logic mem_exists_lut(input logic [ADDR_WIDTH-1:0] addr);
+        int i;
+        for (i = 0; i < NUM_MEM_ENTRIES; i++) begin
+            if (mem_entry_used[i] && (mem_addr_store[i] == addr))
+                return 1'b1;
+        end
+        return 1'b0;
+    endfunction
+
+    task automatic mem_write_lut(input logic [ADDR_WIDTH-1:0] addr, input logic [DATA_WIDTH-1:0] data);
+        int i;
+        // Check if address already exists
+        for (i = 0; i < NUM_MEM_ENTRIES; i++) begin
+            if (mem_entry_used[i] && (mem_addr_store[i] == addr)) begin
+                mem_data_store[i] = data;
+                i = NUM_MEM_ENTRIES; // force loop exit
+            end
+        end
+        // If not found, add new entry (search for empty slot)
+        if (!mem_exists_lut(addr)) begin
+            for (i = 0; i < NUM_MEM_ENTRIES; i++) begin
+                if (!mem_entry_used[i]) begin
+                    mem_addr_store[i] = addr;
+                    mem_data_store[i] = data;
+                    mem_entry_used[i] = 1'b1;
+                    i = NUM_MEM_ENTRIES; // force loop exit
+                end
+            end
+        end
+    endtask
+
     // On a read or write request, latch the request and respond next cycle.
     // The memory model is a simple single-cycle response model.
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             mem_responding  <= 1'b0;
             mem_req_addr    <= '0;
@@ -188,6 +233,12 @@ module tb_atomic;
             mem_rdata       <= '0;
             mem_page_fault  <= 1'b0;
             mem_fault       <= 1'b0;
+            for (int i = 0; i < NUM_MEM_ENTRIES; i++) begin
+                mem_entry_used[i] <= 1'b0;
+                mem_addr_store[i] <= '0;
+                mem_data_store[i] <= '0;
+            end
+            mem_num_entries <= 0;
         end else begin
             // Default: deassert ready and page_fault
             mem_ready      <= 1'b0;
@@ -205,11 +256,11 @@ module tb_atomic;
                     mem_page_fault <= 1'b1;
                     mem_fault      <= 1'b0;
                 end else if (mem_req_is_write) begin
-                    mem_array[mem_req_addr] <= mem_req_wdata;
+                    mem_write_lut(mem_req_addr, mem_req_wdata);
                 end else begin
-                    // Read: provide data from memory array
-                    if (mem_array.exists(mem_req_addr))
-                        mem_rdata <= mem_array[mem_req_addr];
+                    // Read: provide data from memory lookup
+                    if (mem_exists_lut(mem_req_addr))
+                        mem_rdata <= mem_read_lut(mem_req_addr);
                     else
                         mem_rdata <= '0;
                 end
@@ -228,13 +279,17 @@ module tb_atomic;
     // =========================================================================
     // ll_exec_o, sc_exec_o, and fence_exec_o are pulsed for one cycle.
     // We capture them so they can be checked later in the test sequence.
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             ll_exec_captured    <= 1'b0;
+            ll_addr_captured    <= '0;
             sc_exec_captured    <= 1'b0;
             fence_exec_captured <= 1'b0;
         end else begin
-            if (ll_exec)    ll_exec_captured    <= 1'b1;
+            if (ll_exec) begin
+                ll_exec_captured    <= 1'b1;
+                ll_addr_captured    <= ll_addr;
+            end
             if (sc_exec)    sc_exec_captured    <= 1'b1;
             if (fence_exec) fence_exec_captured <= 1'b1;
         end
@@ -243,7 +298,7 @@ module tb_atomic;
     // =========================================================================
     // Monitor tracking for testbench (for verification purposes only)
     // =========================================================================
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             tb_monitor_valid <= 1'b0;
             tb_monitor_addr  <= '0;
@@ -276,7 +331,7 @@ module tb_atomic;
     // Initialize all DUT inputs to safe defaults
     // -------------------------------------------------------------------------
     task automatic init_inputs();
-        opcode           <= 11'h000;
+        opcode           <= 12'h000;
         rd_addr          <= 5'd0;
         rs1_addr         <= 5'd0;
         rs2_addr         <= 5'd0;
@@ -299,6 +354,7 @@ module tb_atomic;
     // -------------------------------------------------------------------------
     task automatic clear_captures();
         ll_exec_captured    <= 1'b0;
+        ll_addr_captured    <= '0;
         sc_exec_captured    <= 1'b0;
         fence_exec_captured <= 1'b0;
     endtask
@@ -307,7 +363,7 @@ module tb_atomic;
     // Issue an instruction to the atomic module
     // -------------------------------------------------------------------------
     task automatic issue_instr(
-        input logic [10:0]           op,
+        input logic [11:0]           op,
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [DATA_WIDTH-1:0] rs2_val,
         input logic [DATA_WIDTH-1:0] rs3_val,
@@ -332,7 +388,7 @@ module tb_atomic;
             @(posedge clk);
             if (mem_ready) begin
                 @(posedge clk);  // consume the ready cycle
-                return;
+                disable wait_mem_ready;
             end
         end
         $display("[%0d] ERROR: Memory timeout — mem_ready never asserted", test_num);
@@ -345,7 +401,7 @@ module tb_atomic;
         repeat (100) begin
             @(posedge clk);
             if (result_valid) begin
-                return;
+                disable wait_result_valid;
             end
         end
         $display("[%0d] ERROR: Result timeout — result_valid never asserted", test_num);
@@ -373,7 +429,7 @@ module tb_atomic;
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [DATA_WIDTH-1:0] data
     );
-        mem_array[addr] = data;
+        mem_write_lut(addr, data);
     endtask
 
     // -------------------------------------------------------------------------
@@ -382,8 +438,8 @@ module tb_atomic;
     function automatic logic [DATA_WIDTH-1:0] mem_load(
         input logic [ADDR_WIDTH-1:0] addr
     );
-        if (mem_array.exists(addr))
-            return mem_array[addr];
+        if (mem_exists_lut(addr))
+            return mem_read_lut(addr);
         else
             return '0;
     endfunction
@@ -480,7 +536,7 @@ module tb_atomic;
         check_val("LL.D result = 0xDEADBEEF_CAFEBABE", result, 64'hDEADBEEF_CAFEBABE);
         check_bool("LL.D result_valid = 1", result_valid, 1'b1);
         check_bool("LL.D ll_exec_o pulsed", ll_exec_captured, 1'b1);
-        check_val("LL.D ll_addr_o = 0x1000", ll_addr, 64'h1000);
+        check_val("LL.D ll_addr_o = 0x1000", ll_addr_captured, 64'h1000);
 
         // =====================================================================
         // Test 2: LL.D sets monitor (CSR readback)
@@ -497,7 +553,7 @@ module tb_atomic;
 
             // Read CSR_MONITOR_ADDR
             read_csr(CSR_MONITOR_ADDR, csr_data);
-            expected_monitor_addr = {64'h1000[63:6], 6'b0};  // 64-byte aligned
+            expected_monitor_addr = (64'h1000 >> 6) << 6;
             check_val("CSR_MONITOR_ADDR = 64-byte aligned 0x1000", csr_data[ADDR_WIDTH-1:0], expected_monitor_addr);
         end
 
@@ -539,10 +595,11 @@ module tb_atomic;
         wait_result_valid();
 
         // Assert monitor_clear (simulating another core's write)
+        // Use blocking assignments to ensure signal is stable before clock edge
+        monitor_clear = 1'b1;
         @(posedge clk);
-        monitor_clear <= 1'b1;
+        monitor_clear = 1'b0;
         @(posedge clk);
-        monitor_clear <= 1'b0;
 
         // Execute SC.D at address 0x3000
         issue_instr(OP_SC_D, 64'h3000, 64'hDEADDEAD_DEADDEAD, 64'h0, 64'h0);

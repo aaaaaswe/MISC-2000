@@ -1,15 +1,15 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Instruction Decoder: 11-bit opcode → class / addr-mode / dtype.
+// Instruction Decoder: 12-bit opcode → class / addr-mode / dtype.
 // Priority: Int Arithmetic > Logic (0x400-0x407); System late > SIMD.
 module misc_decoder (
-    input  logic [10:0] opcode_i,
+    input  logic [11:0] opcode_i,
     output logic [3:0]  inst_class_o,   // see CLASS_* below
     output logic [2:0]  addr_mode_o,    // see ADDR_* below
     output logic [2:0]  data_type_o,    // see DTYPE_* below
     output logic [7:0]  uop_code_o,     // micro-op code (vendor zone only)
     output logic        is_vendor_o,    // opcode in 0x000–0x0FF
-    output logic        is_standard_o,  // opcode in 0x100–0x7CF
+    output logic        is_standard_o,  // opcode in 0x100–0x9FF
     output logic        is_valid_o      // opcode maps to a defined instruction
 );
 
@@ -45,109 +45,114 @@ module misc_decoder (
     localparam int OPS_PER_BASE = 20;
     localparam int MODES_PER_BASE = 5;
 
-    function automatic logic [2:0] offset_to_mode(logic [10:0] off);
+    function automatic logic [2:0] offset_to_mode(logic [11:0] off);
         return 3'(off % MODES_PER_BASE);
     endfunction
 
-    function automatic logic [2:0] offset_to_int_dtype(logic [10:0] off);
+    function automatic logic [2:0] offset_to_int_dtype(logic [11:0] off);
         return 3'((off % OPS_PER_BASE) / MODES_PER_BASE);
     endfunction
 
-    function automatic logic [2:0] offset_to_float_dtype(logic [10:0] off);
+    function automatic logic [2:0] offset_to_float_dtype(logic [11:0] off);
         return 3'(4 + ((off % OPS_PER_BASE) / MODES_PER_BASE));
     endfunction
 
     // Decoding
     // Priority ordering: System late (0x7C0-0x7CF) before SIMD;
     // Integer Arithmetic (0x200-0x407) before Logic (0x408-0x4EF).
-    always_comb begin
+    always @(*) begin
         inst_class_o  = CLASS_DATA_XFER;
         addr_mode_o   = ADDR_IMM;
-        data_type_o   = DTYPE_Q;
+        data_type_o   = DTYPE_B;
         uop_code_o    = 8'd0;
         is_vendor_o   = 1'b0;
         is_standard_o = 1'b0;
         is_valid_o    = 1'b0;
 
-        if (opcode_i <= 11'h0FF) begin
+        if (opcode_i <= 12'h0FF) begin
             is_vendor_o  = 1'b1;
             is_valid_o   = 1'b1;
             inst_class_o = CLASS_VENDOR;
+            data_type_o  = DTYPE_B;
             uop_code_o   = opcode_i[7:0];
 
-        end else if (opcode_i >= 11'h100 && opcode_i <= 11'h1FF) begin
-            logic [10:0] off;
-            off = opcode_i - 11'h100;
+        end else if (opcode_i >= 12'h100 && opcode_i <= 12'h1FF) begin
+            logic [11:0] off;
+            off = opcode_i - 12'h100;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_DATA_XFER;
             data_type_o   = offset_to_int_dtype(off);
-            if (opcode_i == 11'h132 || opcode_i == 11'h133 ||
-                opcode_i == 11'h134 || opcode_i == 11'h15D ||
-                opcode_i == 11'h15E) begin
+            if (opcode_i == 12'h132 || opcode_i == 12'h133 ||
+                opcode_i == 12'h134 || opcode_i == 12'h15D ||
+                opcode_i == 12'h15E) begin
                 addr_mode_o = ADDR_IMM;
+                data_type_o = DTYPE_B;
             end else begin
                 addr_mode_o = offset_to_mode(off);
             end
 
-        end else if (opcode_i >= 11'h200 && opcode_i <= 11'h407) begin
-            logic [10:0] off;
-            off = opcode_i - 11'h200;
+        end else if (opcode_i >= 12'h200 && opcode_i <= 12'h407) begin
+            logic [11:0] off;
+            off = opcode_i - 12'h200;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_INT_ARITH;
             addr_mode_o   = offset_to_mode(off);
             data_type_o   = offset_to_int_dtype(off);
 
-        end else if (opcode_i >= 11'h408 && opcode_i <= 11'h4EF) begin
-            logic [10:0] off;
-            off = opcode_i - 11'h408;
+        end else if (opcode_i >= 12'h408 && opcode_i <= 12'h4EF) begin
+            logic [11:0] off;
+            off = opcode_i - 12'h408;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_LOGIC;
             addr_mode_o   = offset_to_mode(off);
             data_type_o   = offset_to_int_dtype(off);
 
-        end else if (opcode_i >= 11'h500 && opcode_i <= 11'h62B) begin
-            logic [10:0] off;
-            off = opcode_i - 11'h500;
+        end else if (opcode_i >= 12'h500 && opcode_i <= 12'h62B) begin
+            logic [11:0] off;
+            off = opcode_i - 12'h500;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_FLOAT;
             addr_mode_o   = offset_to_mode(off);
             data_type_o   = offset_to_float_dtype(off);
 
-        end else if (opcode_i >= 11'h62C && opcode_i <= 11'h6FF) begin
-            logic [10:0] off;
-            off = opcode_i - 11'h600;
+        end else if (opcode_i >= 12'h62C && opcode_i <= 12'h6FF) begin
+            logic [11:0] off;
+            off = opcode_i - 12'h62C;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_PROG_CTRL;
-            if (opcode_i == 11'h669 || opcode_i == 11'h66A ||
-                opcode_i == 11'h66B) begin
+            addr_mode_o   = offset_to_mode(off);
+            data_type_o   = offset_to_int_dtype(off);
+            if (opcode_i == 12'h669 || opcode_i == 12'h66A ||
+                opcode_i == 12'h66B) begin
                 addr_mode_o = ADDR_IMM;
-            end else begin
-                addr_mode_o = offset_to_mode(off);
             end
 
-        end else if (opcode_i >= 11'h7C0 && opcode_i <= 11'h7CF) begin
+        end else if (opcode_i >= 12'h7C0 && opcode_i <= 12'h7CF) begin
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SYSTEM;
             addr_mode_o   = ADDR_IMM;
+            data_type_o   = DTYPE_B;
 
-        end else if ((opcode_i >= 11'h700 && opcode_i <= 11'h7BF) ||
-                     (opcode_i >= 11'h7D0 && opcode_i <= 11'h7FF)) begin
+        end else if ((opcode_i >= 12'h700 && opcode_i <= 12'h7BF) ||
+                     (opcode_i >= 12'h7D0 && opcode_i <= 12'h7FF)) begin
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SIMD;
             addr_mode_o   = ADDR_REG;
-            data_type_o   = (opcode_i - 11'h700) % 5;
+            data_type_o   = (opcode_i - 12'h700) % 5;
 
-        end else if (opcode_i >= 11'h800 && opcode_i <= 11'h9FF) begin
+        end else if (opcode_i >= 12'h800 && opcode_i <= 12'h9FF) begin
+            is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SYSTEM;
             addr_mode_o   = ADDR_IMM;
+            data_type_o   = DTYPE_B;
         end
     end
 

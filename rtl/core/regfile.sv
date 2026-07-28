@@ -1,6 +1,6 @@
 // Copyright 2026 The MISC-2000 Authors.
 // SPDX-License-Identifier: Apache-2.0
-// Register File: NUM_REGS × DATA_WIDTH. x0 hardwired to zero.
+// Register File: NUM_REGS x DATA_WIDTH. x0 hardwired to zero.
 // Dual combinational read; single sync write. Write-through forwarding.
 module misc_regfile #(
     parameter int DATA_WIDTH = 64,
@@ -25,51 +25,39 @@ module misc_regfile #(
     input  logic [2:0]                     rd_width_i
 );
 
-    // Local parameters / helpers
-    localparam int UPPER_BYTE = (DATA_WIDTH > 8)  ? (DATA_WIDTH - 8)  : 0;
-    localparam int UPPER_HALF = (DATA_WIDTH > 16) ? (DATA_WIDTH - 16) : 0;
-    localparam int UPPER_WORD = (DATA_WIDTH > 32) ? (DATA_WIDTH - 32) : 0;
-
-    function automatic logic [DATA_WIDTH-1:0] compose(
-        input logic [DATA_WIDTH-1:0] old_val,
-        input logic [DATA_WIDTH-1:0] wr_val,
-        input logic [2:0]             width
-    );
-        logic [DATA_WIDTH-1:0] result;
-        result = old_val;
-        unique case (width[1:0])
-            2'd0: begin
-                result[7:0] = wr_val[7:0];
-                if (UPPER_BYTE > 0) result[DATA_WIDTH-1:8] = old_val[DATA_WIDTH-1:8];
-            end
-            2'd1: begin
-                result[15:0] = wr_val[15:0];
-                if (UPPER_HALF > 0) result[DATA_WIDTH-1:16] = old_val[DATA_WIDTH-1:16];
-            end
-            2'd2: begin
-                result[31:0] = wr_val[31:0];
-                if (UPPER_WORD > 0) result[DATA_WIDTH-1:32] = old_val[DATA_WIDTH-1:32];
-            end
-            default: result = wr_val;
-        endcase
-        return result;
-    endfunction
-
     // Register array
     logic [DATA_WIDTH-1:0] regs [NUM_REGS-1:0];
 
     // Combinational reads (x0 hardwired to zero)
-    wire [DATA_WIDTH-1:0] rf_rs1_raw = regs[rs1_addr_i];
-    wire [DATA_WIDTH-1:0] rf_rs2_raw = regs[rs2_addr_i];
-    wire [DATA_WIDTH-1:0] rf_rs1 = (rs1_addr_i == '0) ? '0 : rf_rs1_raw;
-    wire [DATA_WIDTH-1:0] rf_rs2 = (rs2_addr_i == '0) ? '0 : rf_rs2_raw;
-
-    // Write-through forwarding
-    wire [DATA_WIDTH-1:0] rf_rd_raw = regs[rd_addr_i];
-    logic [DATA_WIDTH-1:0] fwd_data;
+    logic [DATA_WIDTH-1:0] rf_rs1_raw;
+    logic [DATA_WIDTH-1:0] rf_rs2_raw;
+    logic [DATA_WIDTH-1:0] rf_rs1;
+    logic [DATA_WIDTH-1:0] rf_rs2;
 
     always @(*) begin
-        fwd_data = compose(rf_rd_raw, rd_data_i, rd_width_i);
+        rf_rs1_raw = regs[rs1_addr_i];
+        rf_rs2_raw = regs[rs2_addr_i];
+    end
+
+    assign rf_rs1 = (rs1_addr_i == '0) ? '0 : rf_rs1_raw;
+    assign rf_rs2 = (rs2_addr_i == '0) ? '0 : rf_rs2_raw;
+
+    // Write-through forwarding
+    logic [DATA_WIDTH-1:0] rf_rd_raw;
+    logic [DATA_WIDTH-1:0] fwd_data;
+    logic [DATA_WIDTH-1:0] wr_data_next;
+
+    always @(*) begin
+        rf_rd_raw = regs[rd_addr_i];
+
+        case (rd_width_i[1:0])
+            2'd0:    fwd_data = {rf_rd_raw[DATA_WIDTH-1:8], rd_data_i[7:0]};
+            2'd1:    fwd_data = {rf_rd_raw[DATA_WIDTH-1:16], rd_data_i[15:0]};
+            2'd2:    fwd_data = {rf_rd_raw[DATA_WIDTH-1:32], rd_data_i[31:0]};
+            default: fwd_data = rd_data_i;
+        endcase
+
+        wr_data_next = fwd_data;
     end
 
     assign rs1_data_o = (rd_wen_i && (rd_addr_i != '0) && (rd_addr_i == rs1_addr_i))
@@ -80,13 +68,13 @@ module misc_regfile #(
                         ? fwd_data
                         : rf_rs2;
 
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             for (int i = 0; i < NUM_REGS; i++) begin
                 regs[i] <= '0;
             end
         end else if (rd_wen_i && (rd_addr_i != '0)) begin
-            regs[rd_addr_i] <= compose(rf_rd_raw, rd_data_i, rd_width_i);
+            regs[rd_addr_i] <= wr_data_next;
         end
     end
 

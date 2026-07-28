@@ -69,6 +69,7 @@ module tb_regfile;
         input logic [63:0]      data,
         input logic [2:0]       width = 3'd3
     );
+        @(posedge clk);
         rd_addr   <= addr[4:0];
         rd_data   <= data;
         rd_wen    <= 1'b1;

@@ -3,8 +3,6 @@
 // GETILEN Testbench: instruction length decoding (2B/4B/6B/8B),
 // page fault handling, busy signal, opcode gating.
 
-`include "../rtl/core/getilen.sv"
-
 module tb_getilen;
 
     // -------------------------------------------------------------------------
@@ -12,7 +10,7 @@ module tb_getilen;
     // -------------------------------------------------------------------------
     localparam CLK_PERIOD = 10;   // 10 ns clock period
 
-    localparam logic [10:0] OPCODE_GETILEN = 11'h0FE;
+    localparam logic [11:0] OPCODE_GETILEN = 12'h0FE;
     localparam logic [63:0] PAGE_FAULT_ADDR = 64'hF000;
 
     // -------------------------------------------------------------------------
@@ -20,7 +18,7 @@ module tb_getilen;
     // -------------------------------------------------------------------------
     logic        clk;
     logic        rst_n;
-    logic [10:0] opcode;
+    logic [11:0] opcode;
     logic [ 4:0] rd_addr;
     logic [63:0] target_addr;
     logic        instr_valid;
@@ -151,7 +149,7 @@ module tb_getilen;
     // Helper: drive idle (no instruction)
     // =====================================================================
     task automatic drive_idle();
-        opcode      <= 11'h000;
+        opcode      <= 12'h000;
         rd_addr     <= 5'd0;
         target_addr <= 64'h0;
         instr_valid <= 1'b0;
@@ -459,7 +457,7 @@ module tb_getilen;
             logic pass;
             pass = 1'b1;
 
-            opcode      <= 11'h000;
+            opcode      <= 12'h000;
             rd_addr     <= 5'd0;
             target_addr <= 64'h1000;
             instr_valid <= 1'b1;

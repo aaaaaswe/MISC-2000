@@ -74,7 +74,7 @@ module misc_exception #(
 
     // Exception priority encoder
     // IFU page fault > mem page fault > illegal instr
-    always_comb begin
+    always @(*) begin
         exception_detected  = 1'b0;
         selected_exc_pc     = '0;
         selected_exc_ilen   = 3'b0;
@@ -113,7 +113,7 @@ module misc_exception #(
     // Exception active state
     assign take_exception = !exception_active_q && exception_detected && !eret_exec_i;
 
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             exception_active_q <= 1'b0;
         end else if (eret_exec_i) begin
@@ -124,7 +124,7 @@ module misc_exception #(
     end
 
     // Exception info latch
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             exception_pc_q    <= '0;
             exception_ilen_q  <= 3'b0;
@@ -137,11 +137,11 @@ module misc_exception #(
     end
 
     // Output assignments
-    assign exception_pc_o    = exception_pc_q;
-    assign exception_ilen_o  = exception_ilen_q;
-    assign exception_cause_o = exception_cause_q;
+    assign exception_pc_o    = take_exception ? selected_exc_pc     : exception_pc_q;
+    assign exception_ilen_o  = take_exception ? selected_exc_ilen   : exception_ilen_q;
+    assign exception_cause_o = take_exception ? selected_exc_cause  : exception_cause_q;
     assign exception_taken_o = take_exception;
-    assign exception_active_o = exception_active_q;
+    assign exception_active_o = take_exception || exception_active_q;
     assign flush_pipeline_o = take_exception || eret_exec_i;
 
     assign exception_target_pc_o = eret_exec_i                     ? csr_eret_target_i :

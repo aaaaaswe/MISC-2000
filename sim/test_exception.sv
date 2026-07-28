@@ -3,9 +3,6 @@
 // Exception & CSR Testbench: tests entry, priority, ERET calculation,
 // CSR read/write, pipeline flush, exception-active state.
 
-`include "../rtl/core/exception.sv"
-`include "../rtl/core/csr.sv"
-
 module tb_exception;
 
     // -------------------------------------------------------------------------
@@ -191,9 +188,11 @@ module tb_exception;
         input logic [11:0]          addr,
         input logic [DATA_WIDTH-1:0] data
     );
+        #1;
         csr_wen_i   = 1'b1;
         csr_addr_i  = addr;
         csr_wdata_i = data;
+        @(posedge clk);
         @(posedge clk);
         csr_wen_i   = 1'b0;
         csr_addr_i  = 12'h000;
@@ -219,8 +218,11 @@ module tb_exception;
     // Helper: execute ERET — pulses eret_exec_i for one cycle
     // -------------------------------------------------------------------------
     task automatic do_eret();
+        // Set on falling edge to be stable before next rising edge
+        @(negedge clk);
         eret_exec_i = 1'b1;
         @(posedge clk);
+        #1;  // Wait for DUT to update
         eret_exec_i = 1'b0;
     endtask
 
@@ -244,8 +246,6 @@ module tb_exception;
         end
         test_num = test_num + 1;
 
-        // Also check flush_pipeline_o on the same cycle
-        #0;
         if (flush_pipeline_o !== 1'b1) begin
             $display("[%0d] FAIL: %s — flush_pipeline_o expected 1, got %b",
                      test_num, desc, flush_pipeline_o);
@@ -256,8 +256,6 @@ module tb_exception;
         end
         test_num = test_num + 1;
 
-        // Check exception_target_pc_o on exception entry
-        #0;
         if (exception_target_pc_o !== exp_target_pc) begin
             $display("[%0d] FAIL: %s — exception_target_pc_o expected 0x%016h, got 0x%016h",
                      test_num, desc, exp_target_pc, exception_target_pc_o);
@@ -270,7 +268,7 @@ module tb_exception;
         test_num = test_num + 1;
 
         @(posedge clk);
-        // Clear exception inputs after the edge
+        #1;
         init_inputs();
     endtask
 
@@ -343,6 +341,7 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
+        #1;
         init_inputs();
 
         // Now read CSR_EPC via CSR read interface (combinational)
@@ -452,6 +451,7 @@ module tb_exception;
         check("Test 5a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
+        #1;
         init_inputs();
 
         // Check latched cause (IFU page fault = 0x0C wins over data page fault 0x0D)
@@ -482,6 +482,7 @@ module tb_exception;
         check("Test 6a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
+        #1;
         init_inputs();
 
         check("Test 6b: exception_cause_o = 0x0C (page fault beats illegal instr)",
@@ -506,6 +507,7 @@ module tb_exception;
         check("Test 7a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
+        #1;
         init_inputs();
 
         // Verify exception_active_o is now set
@@ -525,6 +527,7 @@ module tb_exception;
               exception_taken_o === 1'b0,
               $sformatf("exception_taken_o = %b (expected 0)", exception_taken_o));
         @(posedge clk);
+        #1;
         init_inputs();
 
         // Execute ERET to clear exception state
@@ -591,6 +594,7 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
+        #1;
         init_inputs();
 
         do_eret();
@@ -609,6 +613,7 @@ module tb_exception;
 
         #1;
         @(posedge clk);
+        #1;
         init_inputs();
 
         // Verify exception_active_o is set -> memory operations should be blocked

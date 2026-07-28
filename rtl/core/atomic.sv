@@ -11,7 +11,7 @@ module misc_atomic #(
     input  logic                         rst_n_i,
 
     // Instruction decode inputs
-    input  logic [10:0]                  opcode_i,
+    input  logic [11:0]                  opcode_i,
     input  logic [4:0]                   rd_addr_i,
     input  logic [4:0]                   rs1_addr_i,
     input  logic [4:0]                   rs2_addr_i,
@@ -52,14 +52,14 @@ module misc_atomic #(
 );
 
     // Opcode definitions
-    localparam logic [10:0] OP_LL_D      = 11'h040;
-    localparam logic [10:0] OP_SC_D      = 11'h041;
-    localparam logic [10:0] OP_CAS_IMM   = 11'h144;
-    localparam logic [10:0] OP_CAS_REG   = 11'h145;
-    localparam logic [10:0] OP_CAS_DIR   = 11'h146;
-    localparam logic [10:0] OP_CAS_IDX   = 11'h147;
-    localparam logic [10:0] OP_CAS_STK   = 11'h148;
-    localparam logic [10:0] OP_FENCE     = 11'h15E;
+    localparam logic [11:0] OP_LL_D      = 12'h040;
+    localparam logic [11:0] OP_SC_D      = 12'h041;
+    localparam logic [11:0] OP_CAS_IMM   = 12'h144;
+    localparam logic [11:0] OP_CAS_REG   = 12'h145;
+    localparam logic [11:0] OP_CAS_DIR   = 12'h146;
+    localparam logic [11:0] OP_CAS_IDX   = 12'h147;
+    localparam logic [11:0] OP_CAS_STK   = 12'h148;
+    localparam logic [11:0] OP_FENCE     = 12'h15E;
 
     // State machine definitions
     typedef enum logic [2:0] {
@@ -92,8 +92,8 @@ module misc_atomic #(
     // Cross-page detection: atomics must not cross 4 KB boundary
     logic [12:0] addr_offset;
     logic cross_page;
-    always_comb begin
-        unique case (DATA_WIDTH)
+    always @(*) begin
+        case (DATA_WIDTH)
             32: addr_offset = 13'd4;
             64: addr_offset = 13'd8;
             default: addr_offset = 13'd4;
@@ -115,7 +115,7 @@ module misc_atomic #(
     logic [ADDR_WIDTH-1:0]   exception_addr_q; // latched exception address
 
     // State machine (sequential)
-    always_ff @(posedge clk_i or negedge rst_n_i) begin
+    always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             state_q          <= STATE_IDLE;
             read_data_q      <= {DATA_WIDTH{1'b0}};
@@ -184,7 +184,7 @@ module misc_atomic #(
     end
 
     // State machine (combinatorial)
-    always_comb begin
+    always @(*) begin
         // Default outputs
         state_d           = state_q;
         mem_addr_o        = addr_q;
@@ -201,7 +201,7 @@ module misc_atomic #(
         busy_o            = 1'b0;
         fence_exec_o      = 1'b0;
 
-        unique case (state_q)
+        case (state_q)
 
             STATE_IDLE: begin
                 if (instr_valid_i && is_atomic) begin
@@ -235,7 +235,7 @@ module misc_atomic #(
                             state_d   = STATE_DONE;
                         end else if (is_cas_q) begin
                             if (mem_rdata_i == wdata_q) begin
-                                mem_wdata_o = wdata_q;
+                                mem_wdata_o = cas_new_val_q;
                                 mem_write_o = 1'b1;
                                 state_d     = STATE_WRITE;
                             end else begin
@@ -288,7 +288,7 @@ module misc_atomic #(
 
     // synthesis translate_off
     `ifndef SYNTHESIS
-    always_comb begin
+    always @(*) begin
         if (rst_n_i && mem_read_o && mem_write_o) begin
             $display("ERROR: Atomic: mem_read_o and mem_write_o both asserted at time %0t", $time);
         end
