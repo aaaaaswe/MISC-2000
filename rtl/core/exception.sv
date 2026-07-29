@@ -136,10 +136,11 @@ module misc_exception #(
         end
     end
 
-    // Output assignments
-    assign exception_pc_o    = exception_pc_q;
-    assign exception_ilen_o  = exception_ilen_q;
-    assign exception_cause_o = exception_cause_q;
+    // Output assignments — pass-through combinational values to avoid
+    // same-clock-edge race with the CSR module's register captures.
+    assign exception_pc_o    = take_exception ? selected_exc_pc    : exception_pc_q;
+    assign exception_ilen_o  = take_exception ? selected_exc_ilen  : exception_ilen_q;
+    assign exception_cause_o = take_exception ? selected_exc_cause : exception_cause_q;
     assign exception_taken_o = take_exception;
     assign exception_active_o = exception_active_q;
     assign flush_pipeline_o = take_exception || eret_exec_i;

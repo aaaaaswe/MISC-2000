@@ -11,7 +11,7 @@ module misc_atomic #(
     input  logic                         rst_n_i,
 
     // Instruction decode inputs
-    input  logic [10:0]                  opcode_i,
+    input  logic [11:0]                  opcode_i,
     input  logic [4:0]                   rd_addr_i,
     input  logic [4:0]                   rs1_addr_i,
     input  logic [4:0]                   rs2_addr_i,
@@ -52,14 +52,14 @@ module misc_atomic #(
 );
 
     // Opcode definitions
-    localparam logic [10:0] OP_LL_D      = 11'h040;
-    localparam logic [10:0] OP_SC_D      = 11'h041;
-    localparam logic [10:0] OP_CAS_IMM   = 11'h144;
-    localparam logic [10:0] OP_CAS_REG   = 11'h145;
-    localparam logic [10:0] OP_CAS_DIR   = 11'h146;
-    localparam logic [10:0] OP_CAS_IDX   = 11'h147;
-    localparam logic [10:0] OP_CAS_STK   = 11'h148;
-    localparam logic [10:0] OP_FENCE     = 11'h15E;
+    localparam logic [11:0] OP_LL_D      = 12'h040;
+    localparam logic [11:0] OP_SC_D      = 12'h041;
+    localparam logic [11:0] OP_CAS_IMM   = 12'h144;
+    localparam logic [11:0] OP_CAS_REG   = 12'h145;
+    localparam logic [11:0] OP_CAS_DIR   = 12'h146;
+    localparam logic [11:0] OP_CAS_IDX   = 12'h147;
+    localparam logic [11:0] OP_CAS_STK   = 12'h148;
+    localparam logic [11:0] OP_FENCE     = 12'h15E;
 
     // State machine definitions
     typedef enum logic [2:0] {
@@ -90,6 +90,7 @@ module misc_atomic #(
     assign is_atomic = is_ll || is_sc || is_cas || is_fence;
 
     // Cross-page detection: atomics must not cross 4 KB boundary
+    // Use the data address (rs1_data_i), not the instruction address
     logic [12:0] addr_offset;
     logic cross_page;
     always_comb begin
@@ -98,7 +99,7 @@ module misc_atomic #(
             64: addr_offset = 13'd8;
             default: addr_offset = 13'd4;
         endcase
-        cross_page = ({1'b0, inst_addr_i[11:0]} + addr_offset) >= 13'h1000;
+        cross_page = ({1'b0, rs1_data_i[11:0]} + addr_offset) >= 13'h1000;
     end
 
     // Internal registers
@@ -151,7 +152,7 @@ module misc_atomic #(
             if (state_d == STATE_DONE) begin
                 if (state_q == STATE_IDLE && cross_page) begin
                     exception_q      <= 1'b1;
-                    exception_addr_q <= inst_addr_i;
+                    exception_addr_q <= rs1_data_i;
                 end else if (state_q == STATE_READ && mem_page_fault_i) begin
                     exception_q      <= 1'b1;
                     exception_addr_q <= addr_q;
@@ -235,7 +236,7 @@ module misc_atomic #(
                             state_d   = STATE_DONE;
                         end else if (is_cas_q) begin
                             if (mem_rdata_i == wdata_q) begin
-                                mem_wdata_o = wdata_q;
+                                mem_wdata_o = cas_new_val_q;
                                 mem_write_o = 1'b1;
                                 state_d     = STATE_WRITE;
                             end else begin

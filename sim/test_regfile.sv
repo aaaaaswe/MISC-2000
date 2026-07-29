@@ -18,7 +18,7 @@ module tb_regfile;
     // DUT Signals
     // -----------------------------------------------------------------------
     logic                       clk;
-    logic                       rst_n;
+    logic                       rst_n = 1'b1;
     logic [ADDR_WIDTH-1:0]      rs1_addr;
     logic [ADDR_WIDTH-1:0]      rs2_addr;
     logic [ADDR_WIDTH-1:0]      rd_addr;
@@ -69,34 +69,35 @@ module tb_regfile;
         input logic [63:0]      data,
         input logic [2:0]       width = 3'd3
     );
-        rd_addr   <= addr[4:0];
-        rd_data   <= data;
-        rd_wen    <= 1'b1;
-        rd_width  <= width;
         @(posedge clk);
-        rd_wen    <= 1'b0;
-        rd_addr   <= '0;
-        rd_data   <= '0;
+        rd_addr   = addr[4:0];
+        rd_data   = data;
+        rd_wen    = 1'b1;
+        rd_width  = width;
+        @(posedge clk);
+        rd_wen    = 1'b0;
+        rd_addr   = '0;
+        rd_data   = '0;
     endtask
 
     task automatic read_port1(
         input int addr
     );
-        rs1_addr <= addr[4:0];
+        rs1_addr = addr[4:0];
     endtask
 
     task automatic read_port2(
         input int addr
     );
-        rs2_addr <= addr[4:0];
+        rs2_addr = addr[4:0];
     endtask
 
     task automatic read_both(
         input int addr1,
         input int addr2
     );
-        rs1_addr <= addr1[4:0];
-        rs2_addr <= addr2[4:0];
+        rs1_addr = addr1[4:0];
+        rs2_addr = addr2[4:0];
     endtask
 
     task automatic check_equal(
@@ -115,9 +116,9 @@ module tb_regfile;
     endtask
 
     task automatic apply_reset();
-        rst_n <= 1'b0;
+        rst_n = 1'b0;
         repeat (3) @(posedge clk);
-        rst_n <= 1'b1;
+        rst_n = 1'b1;
         @(posedge clk);
     endtask
 
@@ -256,19 +257,19 @@ module tb_regfile;
         #10;
         // Now issue write and read simultaneously
         @(posedge clk);
-        rd_addr   <= 5'd7;
-        rd_data   <= 64'hDEADBEEFCAFEFACE;
-        rd_wen    <= 1'b1;
-        rd_width  <= 3'd3;
-        rs1_addr  <= 5'd7;
+        rd_addr   = 5'd7;
+        rd_data   = 64'hDEADBEEFCAFEFACE;
+        rd_wen    = 1'b1;
+        rd_width  = 3'd3;
+        rs1_addr  = 5'd7;
         @(posedge clk);  // Wait one cycle — forwarding should give new value
         check_equal("x7 forwarded Q write (same cycle)", rs1_data,
                     64'hDEADBEEFCAFEFACE);
         // Deassert write
-        rd_wen    <= 1'b0;
-        rd_addr   <= '0;
-        rd_data   <= '0;
-        rs1_addr  <= '0;
+        rd_wen    = 1'b0;
+        rd_addr   = '0;
+        rd_data   = '0;
+        rs1_addr  = '0;
         @(posedge clk);
         // Verify it was actually committed
         #10;
@@ -287,50 +288,50 @@ module tb_regfile;
         #10;
         // Issue B write and read simultaneously
         @(posedge clk);
-        rd_addr   <= 5'd8;
-        rd_data   <= 64'h5A;
-        rd_wen    <= 1'b1;
-        rd_width  <= 3'd0;  // B write
-        rs1_addr  <= 5'd8;
+        rd_addr   = 5'd8;
+        rd_data   = 64'h5A;
+        rd_wen    = 1'b1;
+        rd_width  = 3'd0;  // B write
+        rs1_addr  = 5'd8;
         @(posedge clk);  // Forwarding should give merged value
         check_equal("x8 forwarded B write (same cycle)", rs1_data,
                     64'h888888888888885A);
-        rd_wen    <= 1'b0;
-        rd_addr   <= '0;
-        rd_data   <= '0;
-        rs1_addr  <= '0;
+        rd_wen    = 1'b0;
+        rd_addr   = '0;
+        rd_data   = '0;
+        rs1_addr  = '0;
         @(posedge clk);
 
         // Also test W forwarding
         @(posedge clk);
-        rd_addr   <= 5'd8;
-        rd_data   <= 64'hBEEF;
-        rd_wen    <= 1'b1;
-        rd_width  <= 3'd1;  // W write
-        rs1_addr  <= 5'd8;
+        rd_addr   = 5'd8;
+        rd_data   = 64'hBEEF;
+        rd_wen    = 1'b1;
+        rd_width  = 3'd1;  // W write
+        rs1_addr  = 5'd8;
         @(posedge clk);
         check_equal("x8 forwarded W write (same cycle)", rs1_data,
                     64'h888888888888BEEF);
-        rd_wen    <= 1'b0;
-        rd_addr   <= '0;
-        rd_data   <= '0;
-        rs1_addr  <= '0;
+        rd_wen    = 1'b0;
+        rd_addr   = '0;
+        rd_data   = '0;
+        rs1_addr  = '0;
         @(posedge clk);
 
         // Also test D forwarding
         @(posedge clk);
-        rd_addr   <= 5'd8;
-        rd_data   <= 64'hCAFEFACE;
-        rd_wen    <= 1'b1;
-        rd_width  <= 3'd2;  // D write
-        rs1_addr  <= 5'd8;
+        rd_addr   = 5'd8;
+        rd_data   = 64'hCAFEFACE;
+        rd_wen    = 1'b1;
+        rd_width  = 3'd2;  // D write
+        rs1_addr  = 5'd8;
         @(posedge clk);
         check_equal("x8 forwarded D write (same cycle)", rs1_data,
                     64'h88888888CAFEFACE);
-        rd_wen    <= 1'b0;
-        rd_addr   <= '0;
-        rd_data   <= '0;
-        rs1_addr  <= '0;
+        rd_wen    = 1'b0;
+        rd_addr   = '0;
+        rd_data   = '0;
+        rs1_addr  = '0;
         @(posedge clk);
 
         // ---------------------------------------------------------------

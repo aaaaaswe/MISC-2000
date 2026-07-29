@@ -3,9 +3,6 @@
 // Atomic Instruction Testbench: tests LL.D, SC.D, CAS.D, cross-page detection,
 // FENCE, and page-fault handling.
 
-`include "../rtl/core/atomic.sv"
-`include "../rtl/core/csr.sv"
-
 `timescale 1ns / 1ps
 
 module tb_atomic;
@@ -20,10 +17,10 @@ module tb_atomic;
     // =========================================================================
     // Opcode Constants
     // =========================================================================
-    localparam logic [10:0] OP_LL_D    = 11'h040;
-    localparam logic [10:0] OP_SC_D    = 11'h041;
-    localparam logic [10:0] OP_CAS_IMM = 11'h144;
-    localparam logic [10:0] OP_FENCE   = 11'h15E;
+    localparam logic [11:0] OP_LL_D    = 12'h040;
+    localparam logic [11:0] OP_SC_D    = 12'h041;
+    localparam logic [11:0] OP_CAS_IMM = 12'h144;
+    localparam logic [11:0] OP_FENCE   = 12'h15E;
 
     // =========================================================================
     // CSR Address Constants
@@ -36,7 +33,7 @@ module tb_atomic;
     // =========================================================================
     logic                       clk;
     logic                       rst_n;
-    logic [10:0]                opcode;
+    logic [11:0]                opcode;
     logic [4:0]                 rd_addr;
     logic [4:0]                 rs1_addr;
     logic [4:0]                 rs2_addr;
@@ -75,15 +72,29 @@ module tb_atomic;
     logic [DATA_WIDTH-1:0]      csr_rdata;
 
     // =========================================================================
-    // Memory Model
+    // Memory Model — simple register-based for iverilog compatibility
     // =========================================================================
-    logic [DATA_WIDTH-1:0]      mem_array [logic [ADDR_WIDTH-1:0]];
     logic                       mem_responding;  // flag: memory is handling a request
     logic [ADDR_WIDTH-1:0]      mem_req_addr;
     logic                       mem_req_is_write;
     logic [DATA_WIDTH-1:0]      mem_req_wdata;
     logic                       mem_fault;        // internal: asserted on next response when inject is set
     logic                       mem_fault_inject; // testbench sets this to inject a page fault
+
+    // Sparse memory storage using named registers for each test address
+    logic [DATA_WIDTH-1:0]      mem_0x1000;
+    logic [DATA_WIDTH-1:0]      mem_0x2000;
+    logic [DATA_WIDTH-1:0]      mem_0x3000;
+    logic [DATA_WIDTH-1:0]      mem_0x4000;
+    logic [DATA_WIDTH-1:0]      mem_0x5000;
+    logic [DATA_WIDTH-1:0]      mem_0x6000;
+    logic [DATA_WIDTH-1:0]      mem_0x7000;
+    logic [DATA_WIDTH-1:0]      mem_0x1FF8;
+
+    // Track which addresses have been written
+    logic mem_valid_0x1000, mem_valid_0x2000, mem_valid_0x3000;
+    logic mem_valid_0x4000, mem_valid_0x5000, mem_valid_0x6000;
+    logic mem_valid_0x7000, mem_valid_0x1FF8;
 
     // =========================================================================
     // Test Infrastructure
@@ -98,6 +109,7 @@ module tb_atomic;
 
     // Pulse capture flags — latch rising edges of pulsed outputs
     logic                       ll_exec_captured;
+    logic [ADDR_WIDTH-1:0]      ll_addr_captured;
     logic                       sc_exec_captured;
     logic                       fence_exec_captured;
 
@@ -170,7 +182,7 @@ module tb_atomic;
         .ll_addr_i        (ll_addr),
         .sc_exec_i        (sc_exec),
         .sc_success_o     (sc_success),
-        .monitor_clear_i  (1'b0)
+        .monitor_clear_i  (monitor_clear)
     );
 
     // =========================================================================
@@ -180,14 +192,21 @@ module tb_atomic;
     // The memory model is a simple single-cycle response model.
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            mem_responding  <= 1'b0;
-            mem_req_addr    <= '0;
+            mem_responding   <= 1'b0;
+            mem_req_addr     <= '0;
             mem_req_is_write <= 1'b0;
-            mem_req_wdata   <= '0;
-            mem_ready       <= 1'b0;
-            mem_rdata       <= '0;
-            mem_page_fault  <= 1'b0;
-            mem_fault       <= 1'b0;
+            mem_req_wdata    <= '0;
+            mem_ready        <= 1'b0;
+            mem_rdata        <= '0;
+            mem_page_fault   <= 1'b0;
+            mem_fault        <= 1'b0;
+            mem_0x1000 <= '0; mem_0x2000 <= '0; mem_0x3000 <= '0;
+            mem_0x4000 <= '0; mem_0x5000 <= '0; mem_0x6000 <= '0;
+            mem_0x7000 <= '0; mem_0x1FF8 <= '0;
+            mem_valid_0x1000 <= 1'b0; mem_valid_0x2000 <= 1'b0;
+            mem_valid_0x3000 <= 1'b0; mem_valid_0x4000 <= 1'b0;
+            mem_valid_0x5000 <= 1'b0; mem_valid_0x6000 <= 1'b0;
+            mem_valid_0x7000 <= 1'b0; mem_valid_0x1FF8 <= 1'b0;
         end else begin
             // Default: deassert ready and page_fault
             mem_ready      <= 1'b0;
@@ -205,13 +224,30 @@ module tb_atomic;
                     mem_page_fault <= 1'b1;
                     mem_fault      <= 1'b0;
                 end else if (mem_req_is_write) begin
-                    mem_array[mem_req_addr] <= mem_req_wdata;
+                    case (mem_req_addr)
+                        64'h1000: begin mem_0x1000 <= mem_req_wdata; mem_valid_0x1000 <= 1'b1; end
+                        64'h2000: begin mem_0x2000 <= mem_req_wdata; mem_valid_0x2000 <= 1'b1; end
+                        64'h3000: begin mem_0x3000 <= mem_req_wdata; mem_valid_0x3000 <= 1'b1; end
+                        64'h4000: begin mem_0x4000 <= mem_req_wdata; mem_valid_0x4000 <= 1'b1; end
+                        64'h5000: begin mem_0x5000 <= mem_req_wdata; mem_valid_0x5000 <= 1'b1; end
+                        64'h6000: begin mem_0x6000 <= mem_req_wdata; mem_valid_0x6000 <= 1'b1; end
+                        64'h7000: begin mem_0x7000 <= mem_req_wdata; mem_valid_0x7000 <= 1'b1; end
+                        64'h1FF8: begin mem_0x1FF8 <= mem_req_wdata; mem_valid_0x1FF8 <= 1'b1; end
+                        default: ;
+                    endcase
                 end else begin
                     // Read: provide data from memory array
-                    if (mem_array.exists(mem_req_addr))
-                        mem_rdata <= mem_array[mem_req_addr];
-                    else
-                        mem_rdata <= '0;
+                    case (mem_req_addr)
+                        64'h1000:  mem_rdata <= mem_valid_0x1000  ? mem_0x1000  : '0;
+                        64'h2000:  mem_rdata <= mem_valid_0x2000  ? mem_0x2000  : '0;
+                        64'h3000:  mem_rdata <= mem_valid_0x3000  ? mem_0x3000  : '0;
+                        64'h4000:  mem_rdata <= mem_valid_0x4000  ? mem_0x4000  : '0;
+                        64'h5000:  mem_rdata <= mem_valid_0x5000  ? mem_0x5000  : '0;
+                        64'h6000:  mem_rdata <= mem_valid_0x6000  ? mem_0x6000  : '0;
+                        64'h7000:  mem_rdata <= mem_valid_0x7000  ? mem_0x7000  : '0;
+                        64'h1FF8:  mem_rdata <= mem_valid_0x1FF8  ? mem_0x1FF8  : '0;
+                        default:   mem_rdata <= '0;
+                    endcase
                 end
             end else if (mem_read || mem_write) begin
                 // Latch new request, respond next cycle
@@ -231,10 +267,14 @@ module tb_atomic;
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             ll_exec_captured    <= 1'b0;
+            ll_addr_captured    <= '0;
             sc_exec_captured    <= 1'b0;
             fence_exec_captured <= 1'b0;
         end else begin
-            if (ll_exec)    ll_exec_captured    <= 1'b1;
+            if (ll_exec) begin
+                ll_exec_captured <= 1'b1;
+                ll_addr_captured <= ll_addr;
+            end
             if (sc_exec)    sc_exec_captured    <= 1'b1;
             if (fence_exec) fence_exec_captured <= 1'b1;
         end
@@ -276,7 +316,7 @@ module tb_atomic;
     // Initialize all DUT inputs to safe defaults
     // -------------------------------------------------------------------------
     task automatic init_inputs();
-        opcode           <= 11'h000;
+        opcode           <= 12'h000;
         rd_addr          <= 5'd0;
         rs1_addr         <= 5'd0;
         rs2_addr         <= 5'd0;
@@ -299,6 +339,7 @@ module tb_atomic;
     // -------------------------------------------------------------------------
     task automatic clear_captures();
         ll_exec_captured    <= 1'b0;
+        ll_addr_captured    <= '0;
         sc_exec_captured    <= 1'b0;
         fence_exec_captured <= 1'b0;
     endtask
@@ -307,7 +348,7 @@ module tb_atomic;
     // Issue an instruction to the atomic module
     // -------------------------------------------------------------------------
     task automatic issue_instr(
-        input logic [10:0]           op,
+        input logic [11:0]           op,
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [DATA_WIDTH-1:0] rs2_val,
         input logic [DATA_WIDTH-1:0] rs3_val,
@@ -327,28 +368,32 @@ module tb_atomic;
     // Wait for memory operation to complete (mem_ready asserted)
     // -------------------------------------------------------------------------
     task automatic wait_mem_ready();
-        // Wait until memory responds, or timeout
-        repeat (100) begin
+        int i;
+        i = 0;
+        while (i < 100 && !mem_ready) begin
             @(posedge clk);
-            if (mem_ready) begin
-                @(posedge clk);  // consume the ready cycle
-                return;
-            end
+            i = i + 1;
         end
-        $display("[%0d] ERROR: Memory timeout — mem_ready never asserted", test_num);
+        if (mem_ready) begin
+            @(posedge clk);  // consume the ready cycle
+        end else begin
+            $display("[%0d] ERROR: Memory timeout — mem_ready never asserted", test_num);
+        end
     endtask
 
     // -------------------------------------------------------------------------
     // Wait for result_valid
     // -------------------------------------------------------------------------
     task automatic wait_result_valid();
-        repeat (100) begin
+        int i;
+        i = 0;
+        while (i < 100 && !result_valid) begin
             @(posedge clk);
-            if (result_valid) begin
-                return;
-            end
+            i = i + 1;
         end
-        $display("[%0d] ERROR: Result timeout — result_valid never asserted", test_num);
+        if (!result_valid) begin
+            $display("[%0d] ERROR: Result timeout — result_valid never asserted", test_num);
+        end
     endtask
 
     // -------------------------------------------------------------------------
@@ -373,7 +418,17 @@ module tb_atomic;
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [DATA_WIDTH-1:0] data
     );
-        mem_array[addr] = data;
+        case (addr)
+            64'h1000: begin mem_0x1000 = data; mem_valid_0x1000 = 1'b1; end
+            64'h2000: begin mem_0x2000 = data; mem_valid_0x2000 = 1'b1; end
+            64'h3000: begin mem_0x3000 = data; mem_valid_0x3000 = 1'b1; end
+            64'h4000: begin mem_0x4000 = data; mem_valid_0x4000 = 1'b1; end
+            64'h5000: begin mem_0x5000 = data; mem_valid_0x5000 = 1'b1; end
+            64'h6000: begin mem_0x6000 = data; mem_valid_0x6000 = 1'b1; end
+            64'h7000: begin mem_0x7000 = data; mem_valid_0x7000 = 1'b1; end
+            64'h1FF8: begin mem_0x1FF8 = data; mem_valid_0x1FF8 = 1'b1; end
+            default:  $display("mem_store: Unsupported address 0x%0h", addr);
+        endcase
     endtask
 
     // -------------------------------------------------------------------------
@@ -382,10 +437,17 @@ module tb_atomic;
     function automatic logic [DATA_WIDTH-1:0] mem_load(
         input logic [ADDR_WIDTH-1:0] addr
     );
-        if (mem_array.exists(addr))
-            return mem_array[addr];
-        else
-            return '0;
+        case (addr)
+            64'h1000:  mem_load = mem_valid_0x1000  ? mem_0x1000  : '0;
+            64'h2000:  mem_load = mem_valid_0x2000  ? mem_0x2000  : '0;
+            64'h3000:  mem_load = mem_valid_0x3000  ? mem_0x3000  : '0;
+            64'h4000:  mem_load = mem_valid_0x4000  ? mem_0x4000  : '0;
+            64'h5000:  mem_load = mem_valid_0x5000  ? mem_0x5000  : '0;
+            64'h6000:  mem_load = mem_valid_0x6000  ? mem_0x6000  : '0;
+            64'h7000:  mem_load = mem_valid_0x7000  ? mem_0x7000  : '0;
+            64'h1FF8:  mem_load = mem_valid_0x1FF8  ? mem_0x1FF8  : '0;
+            default:   mem_load = '0;
+        endcase
     endfunction
 
     // -------------------------------------------------------------------------
@@ -480,7 +542,7 @@ module tb_atomic;
         check_val("LL.D result = 0xDEADBEEF_CAFEBABE", result, 64'hDEADBEEF_CAFEBABE);
         check_bool("LL.D result_valid = 1", result_valid, 1'b1);
         check_bool("LL.D ll_exec_o pulsed", ll_exec_captured, 1'b1);
-        check_val("LL.D ll_addr_o = 0x1000", ll_addr, 64'h1000);
+        check_val("LL.D ll_addr_o = 0x1000", ll_addr_captured, 64'h1000);
 
         // =====================================================================
         // Test 2: LL.D sets monitor (CSR readback)
@@ -497,7 +559,7 @@ module tb_atomic;
 
             // Read CSR_MONITOR_ADDR
             read_csr(CSR_MONITOR_ADDR, csr_data);
-            expected_monitor_addr = {64'h1000[63:6], 6'b0};  // 64-byte aligned
+            expected_monitor_addr = 64'h1000 & ~64'd63;  // 64-byte aligned
             check_val("CSR_MONITOR_ADDR = 64-byte aligned 0x1000", csr_data[ADDR_WIDTH-1:0], expected_monitor_addr);
         end
 
@@ -600,15 +662,11 @@ module tb_atomic;
         // =====================================================================
         $display("\n--- Test 7: CAS cross-page detection ---");
 
-        // Set inst_addr to 0x1FFE (4-byte instruction crossing page boundary)
-        // Set opcode in 0x144-0x148 range (CAS range)
-        // The 4-byte instruction at 0x1FFE spans [0x1FFE, 0x1FFF, 0x2000, 0x2001]
-        // which crosses the 4KB page boundary at 0x2000
-        //
-        // On cross-page, the state goes IDLE → DONE, so result_valid_o pulses
-        // and exception_o is high alongside result_valid_o.
+        // Set rs1_data to 0x1FF8 (8-byte access ending at 0x2000, crossing 4KB boundary)
+        // The cross-page check: ({1'b0, rs1_data_i[11:0]} + 8) >= 13'h1000
+        // For 0x1FF8: (0x1FF8 + 8) = 0x2000 >= 0x1000 → cross_page = 1
         opcode      <= OP_CAS_IMM;
-        rs1_data    <= 64'h0;
+        rs1_data    <= 64'h1FF8;
         rs2_data    <= 64'h0;
         rs3_data    <= 64'h0;
         inst_addr   <= 64'h1FFE;
@@ -620,7 +678,7 @@ module tb_atomic;
         wait_result_valid();
 
         check_bool("CAS cross-page: exception_o = 1", exception, 1'b1);
-        check_val("CAS cross-page: exception_addr_o = 0x1FFE", exception_addr, 64'h1FFE);
+        check_val("CAS cross-page: exception_addr_o = 0x1FF8", exception_addr, 64'h1FF8);
 
         // =====================================================================
         // Test 8: FENCE instruction

@@ -155,7 +155,7 @@ module tb_exception;
     );
 
     // -------------------------------------------------------------------------
-    // Helper: initialize all inputs to inactive
+    // Helper: initialize all inputs to inactive (blocking — for initial setup)
     // -------------------------------------------------------------------------
     task automatic init_inputs();
         ifu_exception_i        = 1'b0;
@@ -178,6 +178,25 @@ module tb_exception;
     endtask
 
     // -------------------------------------------------------------------------
+    // Helper: clear exception inputs (non-blocking — avoids race with
+    // always_ff capture at the same posedge clk)
+    // -------------------------------------------------------------------------
+    task automatic clear_exception_inputs();
+        ifu_exception_i        <= 1'b0;
+        ifu_exception_cause_i  <= 2'b00;
+        ifu_exception_addr_i   <= '0;
+        ifu_instr_len_i        <= 3'd0;
+        mem_exception_i        <= 1'b0;
+        mem_exception_cause_i  <= 2'b00;
+        mem_exception_addr_i   <= '0;
+        mem_instr_len_i        <= 3'd0;
+        decode_exception_i     <= 1'b0;
+        decode_exception_cause_i <= 2'b00;
+        decode_exception_addr_i  <= '0;
+        decode_instr_len_i     <= 3'd0;
+    endtask
+
+    // -------------------------------------------------------------------------
     // Helper: wait N clock cycles
     // -------------------------------------------------------------------------
     task automatic wait_cycles(input integer n);
@@ -195,8 +214,17 @@ module tb_exception;
         csr_addr_i  = addr;
         csr_wdata_i = data;
         @(posedge clk);
-        csr_wen_i   = 1'b0;
-        csr_addr_i  = 12'h000;
+        // Blocking clear: the CSR always_ff has ALREADY captured the write
+        // at this posedge, so clearing immediately is safe and prevents
+        // stale NBAs from interfering with subsequent reads.
+        #0;
+        csr_ren_i  = 1'b1;
+        csr_addr_i = addr;
+        #1;
+        $display("[DBG-CSR-WRITE] addr=%h wdata=%h rdata=%h", addr, data, csr_rdata_o);
+        csr_ren_i  = 1'b0;
+        csr_wen_i  = 1'b0;
+        csr_addr_i = 12'h000;
         csr_wdata_i = '0;
     endtask
 
@@ -221,7 +249,7 @@ module tb_exception;
     task automatic do_eret();
         eret_exec_i = 1'b1;
         @(posedge clk);
-        eret_exec_i = 1'b0;
+        eret_exec_i <= 1'b0;
     endtask
 
     // -------------------------------------------------------------------------
@@ -270,8 +298,8 @@ module tb_exception;
         test_num = test_num + 1;
 
         @(posedge clk);
-        // Clear exception inputs after the edge
-        init_inputs();
+        // Use non-blocking to clear exception inputs after always_ff has captured
+        clear_exception_inputs();
     endtask
 
     // -------------------------------------------------------------------------
@@ -343,7 +371,7 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
-        init_inputs();
+        clear_exception_inputs();
 
         // Now read CSR_EPC via CSR read interface (combinational)
         csr_ren_i  = 1'b1;
@@ -393,7 +421,7 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
-        eret_exec_i = 1'b0;
+        eret_exec_i <= 1'b0;
         wait_cycles(1);
 
         // =================================================================
@@ -411,7 +439,7 @@ module tb_exception;
               $sformatf("eret_target_o = 0x%016h", csr_eret_target));
 
         @(posedge clk);
-        eret_exec_i = 1'b0;
+        eret_exec_i <= 1'b0;
         wait_cycles(1);
 
         // =================================================================
@@ -429,7 +457,7 @@ module tb_exception;
               $sformatf("eret_target_o = 0x%016h", csr_eret_target));
 
         @(posedge clk);
-        eret_exec_i = 1'b0;
+        eret_exec_i <= 1'b0;
         wait_cycles(1);
 
         // =================================================================
@@ -452,7 +480,7 @@ module tb_exception;
         check("Test 5a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
-        init_inputs();
+        clear_exception_inputs();
 
         // Check latched cause (IFU page fault = 0x0C wins over data page fault 0x0D)
         check("Test 5b: exception_cause_o = 0x0C (IFU page fault priority)",
@@ -482,7 +510,7 @@ module tb_exception;
         check("Test 6a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
-        init_inputs();
+        clear_exception_inputs();
 
         check("Test 6b: exception_cause_o = 0x0C (page fault beats illegal instr)",
               exception_cause_o === EXC_CAUSE_INSTR_PAGE_FAULT,
@@ -506,7 +534,8 @@ module tb_exception;
         check("Test 7a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
-        init_inputs();
+        clear_exception_inputs();
+        #1;
 
         // Verify exception_active_o is now set
         check("Test 7b: exception_active_o is set",
@@ -525,7 +554,7 @@ module tb_exception;
               exception_taken_o === 1'b0,
               $sformatf("exception_taken_o = %b (expected 0)", exception_taken_o));
         @(posedge clk);
-        init_inputs();
+        clear_exception_inputs();
 
         // Execute ERET to clear exception state
         do_eret();
@@ -591,7 +620,7 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
-        init_inputs();
+        clear_exception_inputs();
 
         do_eret();
         wait_cycles(1);
@@ -609,7 +638,8 @@ module tb_exception;
 
         #1;
         @(posedge clk);
-        init_inputs();
+        clear_exception_inputs();
+        #1;
 
         // Verify exception_active_o is set -> memory operations should be blocked
         check("Test 10a: exception_active_o = 1 during exception handling",
