@@ -119,12 +119,12 @@ module misc_decoder (
 
         end else if (opcode_i >= 11'h62C && opcode_i <= 11'h6FF) begin
             logic [10:0] off;
-            off = opcode_i - 11'h600;
+            off = opcode_i - 11'h62C;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_PROG_CTRL;
-            if (opcode_i == 11'h669 || opcode_i == 11'h66A ||
-                opcode_i == 11'h66B) begin
+            if (opcode_i == 11'h695 || opcode_i == 11'h696 ||
+                opcode_i == 11'h697) begin
                 addr_mode_o = ADDR_IMM;
             end else begin
                 addr_mode_o = offset_to_mode(off);
