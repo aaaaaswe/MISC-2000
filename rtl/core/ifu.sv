@@ -47,6 +47,15 @@ module misc_ifu #(
     localparam int PAGE_SIZE   = 13'h1000;
     localparam int PAGE_MASK   = 12'hFFF;
 
+    // Atomic instruction opcodes (4-byte, must not cross page boundary)
+    localparam logic [10:0] OP_LL_D      = 11'h040;
+    localparam logic [10:0] OP_SC_D      = 11'h041;
+    localparam logic [10:0] OP_CAS_IMM   = 11'h144;
+    localparam logic [10:0] OP_CAS_REG   = 11'h145;
+    localparam logic [10:0] OP_CAS_DIR   = 11'h146;
+    localparam logic [10:0] OP_CAS_IDX   = 11'h147;
+    localparam logic [10:0] OP_CAS_STK   = 11'h148;
+
     // Exception cause encoding
     localparam logic [1:0] EXC_PAGE_FAULT       = 2'b00;
     localparam logic [1:0] EXC_ILLEGAL_INSTR    = 2'b01;
@@ -79,6 +88,13 @@ module misc_ifu #(
     // Combinational helpers
     logic fetching_active;
     assign fetching_active = (state == FETCH_FIRST) || (state == FETCH_REMAINING);
+
+    // Check if opcode is an atomic instruction (LL.D, SC.D, or CAS.D variants)
+    function automatic logic is_atomic_opcode(input logic [10:0] opcode);
+        is_atomic_opcode = (opcode == OP_LL_D) ||
+                           (opcode == OP_SC_D) ||
+                           ((opcode >= OP_CAS_IMM) && (opcode <= OP_CAS_STK));
+    endfunction
 
     // State machine + registers
     always_ff @(posedge clk_i or negedge rst_n_i) begin
@@ -159,13 +175,9 @@ module misc_ifu #(
                                 2'b11: instr_len_enc <= 2'b11;
                             endcase
 
-                            total_bytes_needed <= 4'd2 + {2'b00, mem_rdata_i[7:6], 1'b0};
+                            total_bytes_needed <= 4'd2 + (mem_rdata_i[7:6] * 4'd2);
 
-                            if ((mem_rdata_i[7:6] == 2'b01) &&
-                                ((mem_rdata_i[10:0] == 11'h040) ||
-                                 (mem_rdata_i[10:0] == 11'h041) ||
-                                 ((mem_rdata_i[10:0] >= 11'h144) &&
-                                  (mem_rdata_i[10:0] <= 11'h148)))) begin
+                            if (is_atomic_opcode(mem_rdata_i[10:0])) begin
 
                                 if ((instr_start_addr[11:0] + 13'd4) >= PAGE_SIZE) begin
                                     exception_o        <= 1'b1;
