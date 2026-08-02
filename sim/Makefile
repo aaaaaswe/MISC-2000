@@ -74,38 +74,38 @@ test_exception.vvp: $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_ex
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_exception.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(SIM_DIR)/test_exception.sv
 
-test_atomic.vvp: $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
+test_atomic.vvp: $(RTL_DIR)/atomic.sv $(SIM_DIR)/test_atomic.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_atomic.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/atomic.sv $(SIM_DIR)/test_atomic.sv
 
 # ---- Run Targets -------------------------------------------------------------
 run_alu: $(VCD_DIR) test_alu.vvp
 	@echo "$(YELLOW)[RUN]$(NC) Simulating test_alu ..."
-	$(VVP) test_alu.vvp
+	-$(VVP) -N test_alu.vvp
 
 run_decoder: $(VCD_DIR) test_decoder.vvp
 	@echo "$(YELLOW)[RUN]$(NC) Simulating test_decoder ..."
-	$(VVP) test_decoder.vvp
+	-$(VVP) -N test_decoder.vvp
 
 run_regfile: $(VCD_DIR) test_regfile.vvp
 	@echo "$(YELLOW)[RUN]$(NC) Simulating test_regfile ..."
-	$(VVP) test_regfile.vvp
+	-$(VVP) -N test_regfile.vvp
 
 run_getilen: $(VCD_DIR) test_getilen.vvp
 	@echo "$(YELLOW)[RUN]$(NC) Simulating test_getilen ..."
-	$(VVP) test_getilen.vvp
+	-$(VVP) -N test_getilen.vvp
 
 run_ifu: $(VCD_DIR) test_ifu.vvp
 	@echo "$(YELLOW)[RUN]$(NC) Simulating test_ifu ..."
-	$(VVP) test_ifu.vvp
+	-$(VVP) -N test_ifu.vvp
 
 run_exception: $(VCD_DIR) test_exception.vvp
 	@echo "$(YELLOW)[RUN]$(NC) Simulating test_exception ..."
-	$(VVP) test_exception.vvp
+	-$(VVP) -N test_exception.vvp
 
 run_atomic: $(VCD_DIR) test_atomic.vvp
 	@echo "$(YELLOW)[RUN]$(NC) Simulating test_atomic ..."
-	$(VVP) test_atomic.vvp
+	-$(VVP) -N test_atomic.vvp
 
 # ---- Combined Test Targets (compile + run) -----------------------------------
 test_alu:      compile_alu  run_alu
