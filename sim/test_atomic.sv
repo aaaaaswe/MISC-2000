@@ -10,30 +10,22 @@
 
 module tb_atomic;
 
-    // =========================================================================
     // Parameters
-    // =========================================================================
     localparam int DATA_WIDTH = 64;
     localparam int ADDR_WIDTH = 64;
     localparam int CLK_PERIOD = 10;   // 10 ns
 
-    // =========================================================================
     // Opcode Constants
-    // =========================================================================
     localparam logic [10:0] OP_LL_D    = 11'h040;
     localparam logic [10:0] OP_SC_D    = 11'h041;
     localparam logic [10:0] OP_CAS_IMM = 11'h144;
     localparam logic [10:0] OP_FENCE   = 11'h15E;
 
-    // =========================================================================
     // CSR Address Constants
-    // =========================================================================
     localparam logic [11:0] CSR_MONITOR_ADDR  = 12'h340;
     localparam logic [11:0] CSR_MONITOR_VALID = 12'h341;
 
-    // =========================================================================
     // DUT Signals — misc_atomic
-    // =========================================================================
     logic                       clk;
     logic                       rst_n;
     logic [10:0]                opcode;
@@ -65,18 +57,14 @@ module tb_atomic;
     logic                       busy;
     logic                       fence_exec;
 
-    // =========================================================================
     // DUT Signals — misc_csr
-    // =========================================================================
     logic                       csr_ren_i;
     logic                       csr_wen_i;
     logic [11:0]                csr_addr;
     logic [DATA_WIDTH-1:0]      csr_wdata;
     logic [DATA_WIDTH-1:0]      csr_rdata;
 
-    // =========================================================================
     // Memory Model
-    // =========================================================================
     logic [DATA_WIDTH-1:0]      mem_array [logic [ADDR_WIDTH-1:0]];
     logic                       mem_responding;  // flag: memory is handling a request
     logic [ADDR_WIDTH-1:0]      mem_req_addr;
@@ -85,9 +73,7 @@ module tb_atomic;
     logic                       mem_fault;        // internal: asserted on next response when inject is set
     logic                       mem_fault_inject; // testbench sets this to inject a page fault
 
-    // =========================================================================
     // Test Infrastructure
-    // =========================================================================
     integer pass_count;
     integer fail_count;
     integer test_num;
@@ -101,15 +87,11 @@ module tb_atomic;
     logic                       sc_exec_captured;
     logic                       fence_exec_captured;
 
-    // =========================================================================
     // Clock Generation — 10 ns period, 5 ns high / 5 ns low
-    // =========================================================================
     initial clk = 1'b0;
     always #(CLK_PERIOD / 2) clk = ~clk;
 
-    // =========================================================================
     // DUT Instantiation — misc_atomic
-    // =========================================================================
     misc_atomic #(
         .DATA_WIDTH (DATA_WIDTH),
         .ADDR_WIDTH (ADDR_WIDTH)
@@ -146,9 +128,7 @@ module tb_atomic;
         .fence_exec_o    (fence_exec)
     );
 
-    // =========================================================================
     // DUT Instantiation — misc_csr
-    // =========================================================================
     misc_csr #(
         .DATA_WIDTH (DATA_WIDTH),
         .ADDR_WIDTH (ADDR_WIDTH)
@@ -173,9 +153,7 @@ module tb_atomic;
         .monitor_clear_i  (1'b0)
     );
 
-    // =========================================================================
     // Memory Model Logic
-    // =========================================================================
     // On a read or write request, latch the request and respond next cycle.
     // The memory model is a simple single-cycle response model.
     always_ff @(posedge clk or negedge rst_n) begin
@@ -223,9 +201,7 @@ module tb_atomic;
         end
     end
 
-    // =========================================================================
     // Pulse Capture — latch rising edges of pulsed outputs
-    // =========================================================================
     // ll_exec_o, sc_exec_o, and fence_exec_o are pulsed for one cycle.
     // We capture them so they can be checked later in the test sequence.
     always_ff @(posedge clk or negedge rst_n) begin
@@ -240,9 +216,7 @@ module tb_atomic;
         end
     end
 
-    // =========================================================================
     // Monitor tracking for testbench (for verification purposes only)
-    // =========================================================================
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             tb_monitor_valid <= 1'b0;
@@ -258,13 +232,9 @@ module tb_atomic;
         end
     end
 
-    // =========================================================================
     // Helper Tasks
-    // =========================================================================
 
-    // -------------------------------------------------------------------------
     // Apply reset: active low, 3 cycles
-    // -------------------------------------------------------------------------
     task automatic apply_reset();
         rst_n <= 1'b0;
         repeat (3) @(posedge clk);
@@ -272,9 +242,7 @@ module tb_atomic;
         @(posedge clk);
     endtask
 
-    // -------------------------------------------------------------------------
     // Initialize all DUT inputs to safe defaults
-    // -------------------------------------------------------------------------
     task automatic init_inputs();
         opcode           <= 11'h000;
         rd_addr          <= 5'd0;
@@ -294,18 +262,14 @@ module tb_atomic;
         mem_fault_inject <= 1'b0;
     endtask
 
-    // -------------------------------------------------------------------------
     // Clear pulse capture flags (call before each test that checks pulses)
-    // -------------------------------------------------------------------------
     task automatic clear_captures();
         ll_exec_captured    <= 1'b0;
         sc_exec_captured    <= 1'b0;
         fence_exec_captured <= 1'b0;
     endtask
 
-    // -------------------------------------------------------------------------
     // Issue an instruction to the atomic module
-    // -------------------------------------------------------------------------
     task automatic issue_instr(
         input logic [10:0]           op,
         input logic [ADDR_WIDTH-1:0] addr,
@@ -323,9 +287,7 @@ module tb_atomic;
         instr_valid <= 1'b0;
     endtask
 
-    // -------------------------------------------------------------------------
     // Wait for memory operation to complete (mem_ready asserted)
-    // -------------------------------------------------------------------------
     task automatic wait_mem_ready();
         // Wait until memory responds, or timeout
         repeat (100) begin
@@ -338,9 +300,7 @@ module tb_atomic;
         $display("[%0d] ERROR: Memory timeout — mem_ready never asserted", test_num);
     endtask
 
-    // -------------------------------------------------------------------------
     // Wait for result_valid
-    // -------------------------------------------------------------------------
     task automatic wait_result_valid();
         repeat (100) begin
             @(posedge clk);
@@ -351,9 +311,7 @@ module tb_atomic;
         $display("[%0d] ERROR: Result timeout — result_valid never asserted", test_num);
     endtask
 
-    // -------------------------------------------------------------------------
     // Read a CSR register
-    // -------------------------------------------------------------------------
     task automatic read_csr(
         input  logic [11:0]           addr,
         output logic [DATA_WIDTH-1:0] data
@@ -366,9 +324,7 @@ module tb_atomic;
         csr_addr  <= 12'h000;
     endtask
 
-    // -------------------------------------------------------------------------
     // Preload memory with a value at a given address
-    // -------------------------------------------------------------------------
     task automatic mem_store(
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [DATA_WIDTH-1:0] data
@@ -376,9 +332,7 @@ module tb_atomic;
         mem_array[addr] = data;
     endtask
 
-    // -------------------------------------------------------------------------
     // Read from memory array
-    // -------------------------------------------------------------------------
     function automatic logic [DATA_WIDTH-1:0] mem_load(
         input logic [ADDR_WIDTH-1:0] addr
     );
@@ -388,9 +342,7 @@ module tb_atomic;
             return '0;
     endfunction
 
-    // -------------------------------------------------------------------------
     // Check and report pass/fail
-    // -------------------------------------------------------------------------
     task automatic check(
         input string                test_name,
         input logic [DATA_WIDTH-1:0] actual,
@@ -408,9 +360,7 @@ module tb_atomic;
         test_num = test_num + 1;
     endtask
 
-    // -------------------------------------------------------------------------
     // Check a boolean condition
-    // -------------------------------------------------------------------------
     task automatic check_bool(
         input string  test_name,
         input logic   actual,
@@ -428,9 +378,7 @@ module tb_atomic;
         test_num = test_num + 1;
     endtask
 
-    // -------------------------------------------------------------------------
     // Check a 64-bit value with a formatted message
-    // -------------------------------------------------------------------------
     task automatic check_val(
         input string                test_name,
         input logic [DATA_WIDTH-1:0] actual,
@@ -439,9 +387,7 @@ module tb_atomic;
         check(test_name, actual, expected);
     endtask
 
-    // =========================================================================
     // MAIN TEST SEQUENCE
-    // =========================================================================
     initial begin
         pass_count = 0;
         fail_count = 0;
@@ -459,9 +405,7 @@ module tb_atomic;
         apply_reset();
         $display("Reset complete.\n");
 
-        // =====================================================================
         // Test 1: LL.D — Load Linked
-        // =====================================================================
         $display("--- Test 1: LL.D — Load Linked ---");
 
         // Preload memory at 0x1000
@@ -482,9 +426,7 @@ module tb_atomic;
         check_bool("LL.D ll_exec_o pulsed", ll_exec_captured, 1'b1);
         check_val("LL.D ll_addr_o = 0x1000", ll_addr, 64'h1000);
 
-        // =====================================================================
         // Test 2: LL.D sets monitor (CSR readback)
-        // =====================================================================
         $display("\n--- Test 2: LL.D sets monitor (CSR readback) ---");
 
         begin
@@ -501,9 +443,7 @@ module tb_atomic;
             check_val("CSR_MONITOR_ADDR = 64-byte aligned 0x1000", csr_data[ADDR_WIDTH-1:0], expected_monitor_addr);
         end
 
-        // =====================================================================
         // Test 3: SC.D success
-        // =====================================================================
         $display("\n--- Test 3: SC.D success ---");
 
         // First execute LL.D at address 0x2000 (sets monitor)
@@ -526,9 +466,7 @@ module tb_atomic;
         // Verify memory now contains the store data
         check_val("SC.D memory[0x2000] = 0x12345678_9ABCDEF0", mem_load(64'h2000), 64'h12345678_9ABCDEF0);
 
-        // =====================================================================
         // Test 4: SC.D failure after monitor clear
-        // =====================================================================
         $display("\n--- Test 4: SC.D failure after monitor clear ---");
 
         // Preload memory at 0x3000 with a known value
@@ -553,9 +491,7 @@ module tb_atomic;
         // Verify memory NOT modified
         check_val("SC.D memory[0x3000] unchanged", mem_load(64'h3000), 64'hAAAAAAAA_BBBBBBBB);
 
-        // =====================================================================
         // Test 5: CAS.D — Compare and Swap (match)
-        // =====================================================================
         $display("\n--- Test 5: CAS.D — Compare and Swap (match) ---");
 
         // Preload memory at 0x4000 with compare value
@@ -575,9 +511,7 @@ module tb_atomic;
         // Verify memory now contains new value
         check_val("CAS.D match: memory[0x4000] = new value", mem_load(64'h4000), 64'hCAFECAFE_CAFECAFE);
 
-        // =====================================================================
         // Test 6: CAS.D — Compare and Swap (no match)
-        // =====================================================================
         $display("\n--- Test 6: CAS.D — Compare and Swap (no match) ---");
 
         // Preload memory at 0x5000 with a value
@@ -595,9 +529,7 @@ module tb_atomic;
         // Verify memory NOT modified
         check_val("CAS.D no-match: memory[0x5000] unchanged", mem_load(64'h5000), 64'hFFFFFFFF_00000000);
 
-        // =====================================================================
         // Test 7: CAS cross-page detection
-        // =====================================================================
         $display("\n--- Test 7: CAS cross-page detection ---");
 
         // Set inst_addr to 0x1FFE (4-byte instruction crossing page boundary)
@@ -622,9 +554,7 @@ module tb_atomic;
         check_bool("CAS cross-page: exception_o = 1", exception, 1'b1);
         check_val("CAS cross-page: exception_addr_o = 0x1FFE", exception_addr, 64'h1FFE);
 
-        // =====================================================================
         // Test 8: FENCE instruction
-        // =====================================================================
         $display("\n--- Test 8: FENCE instruction ---");
 
         clear_captures();
@@ -638,9 +568,7 @@ module tb_atomic;
 
         check_bool("FENCE fence_exec_o pulsed", fence_exec_captured, 1'b1);
 
-        // =====================================================================
         // Test 9: LL.D page fault
-        // =====================================================================
         $display("\n--- Test 9: LL.D page fault ---");
 
         // Pulse mem_fault_inject for one cycle to inject a page fault
@@ -657,9 +585,7 @@ module tb_atomic;
         check_bool("LL.D page fault: exception_o = 1", exception, 1'b1);
         check_val("LL.D page fault: exception_addr_o = 0x6000", exception_addr, 64'h6000);
 
-        // =====================================================================
         // Test 10: SC.D page fault during write
-        // =====================================================================
         $display("\n--- Test 10: SC.D page fault during write ---");
 
         // First execute LL.D at address 0x7000 (success)
@@ -681,9 +607,7 @@ module tb_atomic;
         check_bool("SC.D page fault: exception_o = 1", exception, 1'b1);
         check_val("SC.D page fault: exception_addr_o = 0x7000", exception_addr, 64'h7000);
 
-        // =====================================================================
         // SUMMARY
-        // =====================================================================
         $display("\n============================================================");
         $display(" TEST SUMMARY");
         $display("============================================================");
@@ -703,9 +627,7 @@ module tb_atomic;
         $stop;
     end
 
-    // =========================================================================
     // Monitor: detect ll_exec and sc_exec pulses for verification
-    // =========================================================================
     // These are captured in the main test sequence via the signals directly.
     // The ll_exec and sc_exec signals are combinatorial/registered outputs
     // that we sample after the operation completes.

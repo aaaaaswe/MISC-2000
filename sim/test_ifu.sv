@@ -9,9 +9,7 @@
 
 module tb_ifu;
 
-    //=========================================================================
     // Parameters
-    //=========================================================================
     localparam int DATA_WIDTH = 64;
     localparam int ADDR_WIDTH = 64;
     localparam int CLK_PERIOD = 10;   // 10 ns
@@ -29,9 +27,7 @@ module tb_ifu;
     localparam logic [2:0] LEN_6B = 3'd2;
     localparam logic [2:0] LEN_8B = 3'd3;
 
-    //=========================================================================
     // DUT Signals
-    //=========================================================================
     logic                     clk;
     logic                     rst_n;
     logic                     stall;
@@ -52,9 +48,7 @@ module tb_ifu;
     logic [ADDR_WIDTH-1:0]   exception_addr;
     logic [ADDR_WIDTH-1:0]   next_pc;
 
-    //=========================================================================
     // Memory Model
-    //=========================================================================
     logic [15:0]             mem_data  [0:MEM_DEPTH-1];
     logic                    mem_mapped[0:MEM_DEPTH-1];
 
@@ -81,9 +75,7 @@ module tb_ifu;
         end
     end
 
-    //=========================================================================
     // DUT Instantiation
-    //=========================================================================
     misc_ifu #(
         .DATA_WIDTH (DATA_WIDTH),
         .ADDR_WIDTH (ADDR_WIDTH)
@@ -109,22 +101,16 @@ module tb_ifu;
         .next_pc_o        (next_pc)
     );
 
-    //=========================================================================
     // Clock generation — 10 ns period, 5 ns high / 5 ns low
-    //=========================================================================
     initial clk = 1'b0;
     always #(CLK_PERIOD / 2) clk = ~clk;
 
-    //=========================================================================
     // Test infrastructure
-    //=========================================================================
     integer pass_cnt;
     integer fail_cnt;
     integer test_num;
 
-    //=========================================================================
     // Helper: clear memory model
-    //=========================================================================
     task automatic mem_clear();
         for (int i = 0; i < MEM_DEPTH; i++) begin
             mem_data[i]   = 16'h0;
@@ -132,9 +118,7 @@ module tb_ifu;
         end
     endtask
 
-    //=========================================================================
     // Helper: write a 16-bit word into the memory model
-    //=========================================================================
     task automatic mem_write(
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [15:0]           data,
@@ -144,9 +128,7 @@ module tb_ifu;
         mem_mapped[addr[31:1]] = mapped;
     endtask
 
-    //=========================================================================
     // Helper: apply reset (active-low, 3 cycles)
-    //=========================================================================
     task automatic apply_reset();
         rst_n <= 1'b0;
         repeat (3) @(posedge clk);
@@ -154,7 +136,6 @@ module tb_ifu;
         @(posedge clk);
     endtask
 
-    //=========================================================================
     // Helper: initiate fetch with stall=0, then assert stall=1 to hold DONE,
     //         wait the required number of memory-chunk cycles, then sample.
     //
@@ -165,7 +146,6 @@ module tb_ifu;
     //
     // After returning, the IFU is in DONE with stall=1 asserted and
     // outputs are valid.
-    //=========================================================================
     task automatic fetch_and_hold(
         input logic [ADDR_WIDTH-1:0] fetch_pc,
         input int                     num_chunks
@@ -191,12 +171,10 @@ module tb_ifu;
         // Now the IFU is in DONE (held by stall=1).  Outputs are valid.
     endtask
 
-    //=========================================================================
     // Helper: release stall, flush IFU back to IDLE, keep stall=1.
     //          After this the IFU is quiescent in IDLE, ready for the
     //          next test.  fetch_and_hold() will deassert stall when it
     //          is time to issue the next fetch.
-    //=========================================================================
     task automatic release_stall();
         // Flush the IFU to force it back to IDLE (flush has priority
         // over stall in the RTL).  Keep stall=1 so the IFU stays in
@@ -207,9 +185,7 @@ module tb_ifu;
         // IFU is now in IDLE with stall=1.
     endtask
 
-    //=========================================================================
     // Helper: wait for exception or timeout
-    //=========================================================================
     task automatic wait_exception(
         input int timeout_cycles = 100
     );
@@ -226,16 +202,12 @@ module tb_ifu;
         end
     endtask
 
-    //=========================================================================
     // Helper: wait a specified number of cycles
-    //=========================================================================
     task automatic wait_cycles(input int n);
         repeat (n) @(posedge clk);
     endtask
 
-    //=========================================================================
     // Check helpers — various flavours
-    //=========================================================================
 
     task automatic check_bit(
         input string    test_name,
@@ -301,9 +273,7 @@ module tb_ifu;
         test_num = test_num + 1;
     endtask
 
-    //=========================================================================
     // MAIN TEST SEQUENCE
-    //=========================================================================
     initial begin
         pass_cnt = 0;
         fail_cnt = 0;
@@ -313,11 +283,9 @@ module tb_ifu;
         $display(" MISC-2000 IFU Testbench");
         $display("============================================================");
 
-        // -----------------------------------------------------------------
         // Initialize all inputs.  Start with stall=1 to prevent the IFU
         // from issuing spurious fetches after reset while tests are being
         // set up.  fetch_and_hold() will deassert stall when ready.
-        // -----------------------------------------------------------------
         pc            = '0;
         stall         = 1'b1;
         flush         = 1'b0;
@@ -332,9 +300,7 @@ module tb_ifu;
         apply_reset();
         // After reset, IFU is in IDLE with stall=1 — no spurious fetches.
 
-        // =================================================================
         // TEST 1: 2-byte instruction fetch
-        // =================================================================
         $display("\n--- Test 1: 2-byte instruction fetch ---");
 
         mem_clear();
@@ -352,9 +318,7 @@ module tb_ifu;
 
         release_stall();
 
-        // =================================================================
         // TEST 2: 4-byte instruction fetch
-        // =================================================================
         $display("\n--- Test 2: 4-byte instruction fetch ---");
 
         mem_clear();
@@ -377,9 +341,7 @@ module tb_ifu;
 
         release_stall();
 
-        // =================================================================
         // TEST 3: 6-byte instruction fetch
-        // =================================================================
         $display("\n--- Test 3: 6-byte instruction fetch ---");
 
         mem_clear();
@@ -402,9 +364,7 @@ module tb_ifu;
 
         release_stall();
 
-        // =================================================================
         // TEST 4: 8-byte instruction fetch
-        // =================================================================
         $display("\n--- Test 4: 8-byte instruction fetch ---");
 
         mem_clear();
@@ -429,9 +389,7 @@ module tb_ifu;
 
         release_stall();
 
-        // =================================================================
         // TEST 5: Cross-page fetch success
-        // =================================================================
         $display("\n--- Test 5: Cross-page fetch success ---");
 
         mem_clear();
@@ -458,9 +416,7 @@ module tb_ifu;
 
         release_stall();
 
-        // =================================================================
         // TEST 6: Cross-page fetch page fault
-        // =================================================================
         $display("\n--- Test 6: Cross-page fetch page fault ---");
 
         mem_clear();
@@ -491,9 +447,7 @@ module tb_ifu;
         // Let IFU settle back to IDLE
         @(posedge clk);
 
-        // =================================================================
         // TEST 7: Pipeline flush
-        // =================================================================
         $display("\n--- Test 7: Pipeline flush ---");
 
         mem_clear();
@@ -518,9 +472,7 @@ module tb_ifu;
         check_bit("Test 7: instr_valid_o = 0 after flush", instr_valid, 1'b0);
         check_bit("Test 7: exception_o = 0 after flush", exception, 1'b0);
 
-        // =================================================================
         // TEST 8: Pipeline stall
-        // =================================================================
         $display("\n--- Test 8: Pipeline stall ---");
 
         mem_clear();
@@ -547,9 +499,7 @@ module tb_ifu;
 
         release_stall();
 
-        // =================================================================
         // TEST 9: Atomic cross-page detection
-        // =================================================================
         $display("\n--- Test 9: Atomic cross-page detection ---");
 
         mem_clear();
@@ -578,9 +528,7 @@ module tb_ifu;
         // Let IFU settle back to IDLE
         @(posedge clk);
 
-        // =================================================================
         // TEST 10: Branch flush and redirection
-        // =================================================================
         $display("\n--- Test 10: Branch flush and redirection ---");
 
         mem_clear();
@@ -619,9 +567,7 @@ module tb_ifu;
 
         release_stall();
 
-        // =================================================================
         // SUMMARY
-        // =================================================================
         $display("\n============================================================");
         $display(" IFU TEST SUMMARY");
         $display("============================================================");

@@ -5,9 +5,7 @@
 
 module tb_decoder;
 
-    // =========================================================================
     // Signals
-    // =========================================================================
     logic [10:0] opcode_i;
     logic [3:0]  inst_class_o;
     logic [2:0]  addr_mode_o;
@@ -17,9 +15,7 @@ module tb_decoder;
     logic        is_standard_o;
     logic        is_valid_o;
 
-    // =========================================================================
     // DUT Instantiation
-    // =========================================================================
     misc_decoder dut (
         .opcode_i      (opcode_i),
         .inst_class_o  (inst_class_o),
@@ -31,15 +27,11 @@ module tb_decoder;
         .is_valid_o    (is_valid_o)
     );
 
-    // =========================================================================
     // Test Infrastructure
-    // =========================================================================
     integer pass_cnt, fail_cnt;
     integer test_num;
 
-    // -------------------------------------------------------------------------
     // Helper: check all decoder outputs against expected values
-    // -------------------------------------------------------------------------
     task automatic check(
         input string       name,
         input logic [10:0] exp_opcode,
@@ -73,9 +65,7 @@ module tb_decoder;
         end
     endtask
 
-    // -------------------------------------------------------------------------
     // Shorthand: drive opcode then check
-    // -------------------------------------------------------------------------
     task automatic test_opcode(
         input string       name,
         input logic [10:0] opcode,
@@ -95,9 +85,7 @@ module tb_decoder;
         end
     endtask
 
-    // =========================================================================
     // Main Test Sequence
-    // =========================================================================
     initial begin
         pass_cnt = 0;
         fail_cnt = 0;
@@ -108,9 +96,7 @@ module tb_decoder;
         $display(" MISC-2000 Decoder Testbench");
         $display("============================================================");
 
-        // =====================================================================
         // 1. Vendor Zone: 0x000 – 0x0FF
-        // =====================================================================
         $display("--- Vendor Zone (0x000–0x0FF) ---");
 
         // Vendor zone: data_type defaults to Q(3), addr_mode defaults to IMM(0)
@@ -126,9 +112,7 @@ module tb_decoder;
         test_opcode("Vendor[0xFF]",
             11'h0FF, 4'd7, 3'd0, 3'd3, 8'hFF, 1'b1, 1'b0, 1'b1);
 
-        // =====================================================================
         // 2. Data Transfer: 0x100 – 0x1FF
-        // =====================================================================
         $display("--- Data Transfer (0x100–0x1FF) ---");
 
         // Standard addressing: addr_mode = (opcode - 0x100) % 5
@@ -173,11 +157,9 @@ module tb_decoder;
         test_opcode("DataXfer boundary (0x1FF)",
             11'h1FF, 4'd0, 3'd0, 3'd3, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // =====================================================================
         // 3. Integer Arithmetic: 0x200 – 0x407
         //    addr_mode = (opcode - 0x200) % 5
         //    data_type = ((opcode - 0x200) % 20) / 5
-        // =====================================================================
         $display("--- Integer Arithmetic (0x200–0x407) ---");
 
         // ADD.B.IMM:  offset=0,   addr=0(IMM), type=0(B)
@@ -221,7 +203,6 @@ module tb_decoder;
         test_opcode("POPCNT.Q.STK (0x407) last",
             11'h407, 4'd1, 3'd4, 3'd3, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // =====================================================================
         // 4. Logic: 0x400 – 0x4EF
         //    addr_mode = (opcode - 0x400) % 5
         //    data_type = ((opcode - 0x400) % 20) / 5
@@ -230,7 +211,6 @@ module tb_decoder;
         //    Because Integer Arithmetic is checked FIRST in the priority chain,
         //    0x400–0x407 decode as Integer Arithmetic (class=1), not Logic.
         //    Below we test 0x400 to verify this priority behaviour.
-        // =====================================================================
         $display("--- Logic (0x400–0x4EF) ---");
         $display("    (NOTE: 0x400–0x407 decode as Integer Arithmetic due to priority)");
 
@@ -264,10 +244,8 @@ module tb_decoder;
         test_opcode("post-logic  (0x4F0) invalid",
             11'h4F0, 4'd0, 3'd0, 3'd3, 8'd0, 1'b0, 1'b0, 1'b0);
 
-        // =====================================================================
         // 5. Float: 0x500 – 0x62B
         //    dtype encoding: 4=F16, 5=F32, 6=F64, 7=F128 (offset +4 from base)
-        // =====================================================================
         $display("--- Float (0x500–0x62B) ---");
 
         // FADD.F16.IMM: off=0, addr=0(IMM), dtype=4+(0/5)=4(F16)
@@ -294,11 +272,9 @@ module tb_decoder;
         test_opcode("Float last  (0x62B)",
             11'h62B, 4'd3, 3'd4, 3'd7, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // =====================================================================
         // 6. Program Control: 0x62C – 0x6FF
         //    addr_mode = (opcode - 0x62C) % 5
         //    BKPT(0x695), TRACE(0x696), WATCHDOG(0x697) override to IMM
-        // =====================================================================
         $display("--- Program Control (0x62C–0x6FF) ---");
 
         // JMP.IMM: first PC opcode, offset=0, addr=0(IMM)
@@ -337,11 +313,9 @@ module tb_decoder;
         test_opcode("PC boundary (0x6FF)",
             11'h6FF, 4'd4, 3'd1, 3'd3, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // =====================================================================
         // 7. SIMD Vector: 0x700–0x7BF & 0x7D0–0x7FF
         //    addr_mode always REG(1), data_type = (opcode - 0x700) % 5
         //    System late entries (0x7C0–0x7CF) take priority over SIMD
-        // =====================================================================
         $display("--- SIMD Vector (0x700–0x7BF, 0x7D0–0x7FF) ---");
 
         // VADD.I8:  offset=0, dtype=0, addr=1(REG)
@@ -374,12 +348,10 @@ module tb_decoder;
         test_opcode("SIMD last   (0x7FF)",
             11'h7FF, 4'd5, 3'd1, 3'd0, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // =====================================================================
         // 8. System (late entries): 0x7C0 – 0x7CF
         //    These appear inside the SIMD numeric range but decode as System.
         //    They are the last "standard" instructions.
         //    data_type defaults to Q(3).
-        // =====================================================================
         $display("--- System Late (0x7C0–0x7CF) ---");
 
         // SYS_EOI.IMM: first System late entry
@@ -390,24 +362,18 @@ module tb_decoder;
         test_opcode("SYS_SHUTDOWN (0x7CF) last-std",
             11'h7CF, 4'd6, 3'd0, 3'd3, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // =====================================================================
         // 9. System (main): 0x800 – 0x9FF
         //    NOTE: These opcodes require >11 bits and are unreachable with the
         //    current 11-bit opcode width. This is a known limitation.
         //    With 11-bit opcodes, 0x800 truncates to 0x000 (vendor zone).
-        // =====================================================================
         $display("--- System Main (0x800–0x9FF): skipped (opcode width limitation) ---");
 
-        // =====================================================================
         // 10. Invalid Opcodes (within 11-bit range)
-        // =====================================================================
         $display("--- Invalid Opcodes ---");
 
         // 0x4F0 already tested as post-logic invalid above
 
-        // =====================================================================
         // Summary
-        // =====================================================================
         $display("============================================================");
         $display(" Test Summary: %0d passed, %0d failed, %0d total",
                  pass_cnt, fail_cnt, test_num);

@@ -8,9 +8,7 @@
 
 module tb_exception;
 
-    // -------------------------------------------------------------------------
     // Parameters
-    // -------------------------------------------------------------------------
     localparam CLK_PERIOD = 10;          // 10 ns clock period
     localparam DATA_WIDTH = 64;
     localparam ADDR_WIDTH  = 64;
@@ -32,15 +30,11 @@ module tb_exception;
     // Exception handler vector
     localparam logic [63:0] EXC_VECTOR = 64'h0000_0000_8000_0000;
 
-    // -------------------------------------------------------------------------
     // Clock & Reset
-    // -------------------------------------------------------------------------
     logic clk;
     logic rst_n;
 
-    // -------------------------------------------------------------------------
     // misc_exception inputs
-    // -------------------------------------------------------------------------
     logic                     ifu_exception_i;
     logic [1:0]               ifu_exception_cause_i;
     logic [ADDR_WIDTH-1:0]    ifu_exception_addr_i;
@@ -71,9 +65,7 @@ module tb_exception;
     // CSR eret_target → exception csr_eret_target_i
     logic [ADDR_WIDTH-1:0]    csr_eret_target;
 
-    // -------------------------------------------------------------------------
     // misc_csr interface
-    // -------------------------------------------------------------------------
     logic                     csr_ren_i;
     logic                     csr_wen_i;
     logic [11:0]              csr_addr_i;
@@ -81,22 +73,16 @@ module tb_exception;
     logic [DATA_WIDTH-1:0]    csr_rdata_o;
     logic                     sc_success_o;  // unused in these tests
 
-    // -------------------------------------------------------------------------
     // Test infrastructure
-    // -------------------------------------------------------------------------
     integer pass_count;
     integer fail_count;
     integer test_num;
 
-    // -------------------------------------------------------------------------
     // Clock generation
-    // -------------------------------------------------------------------------
     initial clk = 1'b0;
     always #(CLK_PERIOD / 2) clk = ~clk;
 
-    // -------------------------------------------------------------------------
     // DUT: misc_exception
-    // -------------------------------------------------------------------------
     misc_exception #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH)
@@ -127,9 +113,7 @@ module tb_exception;
         .exception_active_o   (exception_active_o)
     );
 
-    // -------------------------------------------------------------------------
     // DUT: misc_csr
-    // -------------------------------------------------------------------------
     misc_csr #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH)
@@ -154,9 +138,7 @@ module tb_exception;
         .monitor_clear_i   (1'b0)
     );
 
-    // -------------------------------------------------------------------------
     // Helper: initialize all inputs to inactive
-    // -------------------------------------------------------------------------
     task automatic init_inputs();
         ifu_exception_i        = 1'b0;
         ifu_exception_cause_i  = 2'b00;
@@ -177,16 +159,12 @@ module tb_exception;
         csr_wdata_i            = '0;
     endtask
 
-    // -------------------------------------------------------------------------
     // Helper: wait N clock cycles
-    // -------------------------------------------------------------------------
     task automatic wait_cycles(input integer n);
         repeat (n) @(posedge clk);
     endtask
 
-    // -------------------------------------------------------------------------
     // Helper: CSR write — drives wen/addr/wdata for one cycle, then waits
-    // -------------------------------------------------------------------------
     task automatic csr_write(
         input logic [11:0]          addr,
         input logic [DATA_WIDTH-1:0] data
@@ -200,9 +178,7 @@ module tb_exception;
         csr_wdata_i = '0;
     endtask
 
-    // -------------------------------------------------------------------------
     // Helper: CSR read — returns rdata (combinational, sampled after settling)
-    // -------------------------------------------------------------------------
     task automatic csr_read(
         input  logic [11:0]           addr,
         output logic [DATA_WIDTH-1:0] rdata
@@ -215,18 +191,14 @@ module tb_exception;
         csr_addr_i = 12'h000;
     endtask
 
-    // -------------------------------------------------------------------------
     // Helper: execute ERET — pulses eret_exec_i for one cycle
-    // -------------------------------------------------------------------------
     task automatic do_eret();
         eret_exec_i = 1'b1;
         @(posedge clk);
         eret_exec_i = 1'b0;
     endtask
 
-    // -------------------------------------------------------------------------
     // Helper: trigger exception and verify exception_taken
-    // -------------------------------------------------------------------------
     task automatic trigger_and_verify_exception(
         input string                desc,
         input logic [3:0]           exp_cause,
@@ -274,9 +246,7 @@ module tb_exception;
         init_inputs();
     endtask
 
-    // -------------------------------------------------------------------------
     // Helper: pass/fail check with message
-    // -------------------------------------------------------------------------
     task automatic check(
         input string  test_name,
         input logic   condition,
@@ -294,9 +264,7 @@ module tb_exception;
         test_num = test_num + 1;
     endtask
 
-    // =====================================================================
     // MAIN TEST SEQUENCE
-    // =====================================================================
     initial begin
         pass_count = 0;
         fail_count = 0;
@@ -306,9 +274,7 @@ module tb_exception;
         $display(" MISC-2000 Exception & CSR Testbench");
         $display("============================================================");
 
-        // -----------------------------------------------------------------
         // Reset sequence
-        // -----------------------------------------------------------------
         init_inputs();
         rst_n = 1'b0;
         wait_cycles(3);
@@ -317,9 +283,7 @@ module tb_exception;
 
         $display("\n--- All inputs initialized, reset released ---\n");
 
-        // =================================================================
         // TEST 1: CSR_EPC and CSR_ILLEN on IFU page-fault exception
-        // =================================================================
         $display("\n========== Test 1: CSR_EPC and CSR_ILLEN on exception ==========");
 
         // Drive IFU page fault: ifu_exception_i=1, cause=page_fault(00),
@@ -369,9 +333,7 @@ module tb_exception;
         do_eret();
         wait_cycles(1);
 
-        // =================================================================
         // TEST 2: ERET return address with 4-byte instruction
-        // =================================================================
         $display("\n========== Test 2: ERET return address (4-byte instruction) ==========");
 
         csr_write(CSR_EPC,   64'h1000);
@@ -396,9 +358,7 @@ module tb_exception;
         eret_exec_i = 1'b0;
         wait_cycles(1);
 
-        // =================================================================
         // TEST 3: ERET return address with 2-byte instruction
-        // =================================================================
         $display("\n========== Test 3: ERET with 2-byte instruction ==========");
 
         csr_write(CSR_EPC,   64'h2000);
@@ -414,9 +374,7 @@ module tb_exception;
         eret_exec_i = 1'b0;
         wait_cycles(1);
 
-        // =================================================================
         // TEST 4: ERET return address with 8-byte instruction
-        // =================================================================
         $display("\n========== Test 4: ERET with 8-byte instruction ==========");
 
         csr_write(CSR_EPC,   64'h3000);
@@ -432,9 +390,7 @@ module tb_exception;
         eret_exec_i = 1'b0;
         wait_cycles(1);
 
-        // =================================================================
         // TEST 5: Exception priority — IFU page fault over memory page fault
-        // =================================================================
         $display("\n========== Test 5: Priority — IFU page fault over memory page fault ==========");
 
         // Assert both simultaneously
@@ -462,9 +418,7 @@ module tb_exception;
         do_eret();
         wait_cycles(1);
 
-        // =================================================================
         // TEST 6: Exception priority — page fault over illegal instruction
-        // =================================================================
         $display("\n========== Test 6: Priority — page fault over illegal instruction ==========");
 
         // Assert IFU page fault AND decode illegal instruction simultaneously
@@ -491,9 +445,7 @@ module tb_exception;
         do_eret();
         wait_cycles(1);
 
-        // =================================================================
         // TEST 7: Exception active state prevents new exceptions
-        // =================================================================
         $display("\n========== Test 7: Exception active state prevents new exceptions ==========");
 
         // Trigger an exception
@@ -537,9 +489,7 @@ module tb_exception;
 
         wait_cycles(1);
 
-        // =================================================================
         // TEST 8: CSR read/write
-        // =================================================================
         $display("\n========== Test 8: CSR read/write ==========");
 
         // Write 0xDEADBEEF to CSR_EPC
@@ -570,9 +520,7 @@ module tb_exception;
 
         wait_cycles(1);
 
-        // =================================================================
         // TEST 9: Pipeline flush on exception
-        // =================================================================
         $display("\n========== Test 9: Pipeline flush on exception ==========");
 
         // Trigger exception
@@ -596,9 +544,7 @@ module tb_exception;
         do_eret();
         wait_cycles(1);
 
-        // =================================================================
         // TEST 10: All-or-nothing semantics — exception_active_o
-        // =================================================================
         $display("\n========== Test 10: All-or-nothing semantics ==========");
 
         // Trigger an exception
@@ -620,9 +566,7 @@ module tb_exception;
         do_eret();
         wait_cycles(1);
 
-        // =================================================================
         // SUMMARY
-        // =================================================================
         $display("\n============================================================");
         $display(" TEST SUMMARY");
         $display("============================================================");
