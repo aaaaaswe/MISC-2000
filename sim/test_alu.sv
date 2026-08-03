@@ -5,9 +5,7 @@
 
 module tb_alu;
 
-    // -------------------------------------------------------------------------
     // Parameters / Localparams
-    // -------------------------------------------------------------------------
     localparam CLK_PERIOD = 10;   // 10 ns clock period
 
     // Data width encodings
@@ -57,9 +55,7 @@ module tb_alu;
     localparam logic [63:0] MASK_D = 64'h00000000FFFFFFFF;
     localparam logic [63:0] MASK_Q = 64'hFFFFFFFFFFFFFFFF;
 
-    // -------------------------------------------------------------------------
     // DUT signals
-    // -------------------------------------------------------------------------
     logic        clk;
     logic [63:0] op_a;
     logic [63:0] op_b;
@@ -71,22 +67,16 @@ module tb_alu;
     logic        overflow;
     logic        carry;
 
-    // -------------------------------------------------------------------------
     // Test infrastructure
-    // -------------------------------------------------------------------------
     integer pass_count;
     integer fail_count;
     integer test_num;
 
-    // -------------------------------------------------------------------------
     // Clock generation
-    // -------------------------------------------------------------------------
     initial clk = 1'b0;
     always #(CLK_PERIOD / 2) clk = ~clk;
 
-    // -------------------------------------------------------------------------
     // DUT instantiation
-    // -------------------------------------------------------------------------
     misc_alu u_dut (
         .op_a_i      (op_a),
         .op_b_i      (op_b),
@@ -99,9 +89,7 @@ module tb_alu;
         .carry_o     (carry)
     );
 
-    // -------------------------------------------------------------------------
     // Helper: get data mask for a given data width
-    // -------------------------------------------------------------------------
     function automatic logic [63:0] get_mask(input logic [2:0] dw);
         case (dw)
             DW_B: get_mask = MASK_B;
@@ -111,9 +99,7 @@ module tb_alu;
         endcase
     endfunction
 
-    // -------------------------------------------------------------------------
     // Helper: get MSB position for a given data width
-    // -------------------------------------------------------------------------
     function automatic int get_msb(input logic [2:0] dw);
         case (dw)
             DW_B: get_msb = 7;
@@ -123,9 +109,7 @@ module tb_alu;
         endcase
     endfunction
 
-    // -------------------------------------------------------------------------
     // Apply stimulus and wait one clock cycle
-    // -------------------------------------------------------------------------
     task automatic apply_op(
         input logic [63:0] a,
         input logic [63:0] b,
@@ -139,12 +123,10 @@ module tb_alu;
         @(posedge clk);
     endtask
 
-    // -------------------------------------------------------------------------
     // Check result and flags; report pass/fail
     // 'chk_flags' is a 4-bit mask: {chk_zero, chk_neg, chk_ovf, chk_carry}
     // When a bit is 1, the corresponding flag is verified against expected.
     // When a bit is 0, that flag is not checked (don't-care).
-    // -------------------------------------------------------------------------
     task automatic check(
         input string      test_name,
         input logic [63:0] exp_result,
@@ -201,9 +183,7 @@ module tb_alu;
         @(posedge clk);
     endtask
 
-    // -------------------------------------------------------------------------
     // Shorthand: check all 4 flags
-    // -------------------------------------------------------------------------
     task automatic check_all(
         input string      test_name,
         input logic [63:0] exp_result,
@@ -215,9 +195,7 @@ module tb_alu;
         check(test_name, exp_result, 4'b1111, exp_zero, exp_neg, exp_ovf, exp_carry);
     endtask
 
-    // -------------------------------------------------------------------------
     // Shorthand: check result only (flags don't-care)
-    // -------------------------------------------------------------------------
     task automatic check_result_only(
         input string      test_name,
         input logic [63:0] exp_result
@@ -225,9 +203,7 @@ module tb_alu;
         check(test_name, exp_result, 4'b0000, 1'b0, 1'b0, 1'b0, 1'b0);
     endtask
 
-    // -------------------------------------------------------------------------
     // Combined: apply_op + check_all
-    // -------------------------------------------------------------------------
     task automatic test_op(
         input string      test_name,
         input logic [63:0] a,
@@ -244,9 +220,7 @@ module tb_alu;
         check_all(test_name, exp_result, exp_zero, exp_neg, exp_ovf, exp_carry);
     endtask
 
-    // -------------------------------------------------------------------------
     // Combined: apply_op + check_result_only
-    // -------------------------------------------------------------------------
     task automatic test_op_result(
         input string      test_name,
         input logic [63:0] a,
@@ -259,9 +233,7 @@ module tb_alu;
         check_result_only(test_name, exp_result);
     endtask
 
-    // =====================================================================
     // MAIN TEST SEQUENCE
-    // =====================================================================
     initial begin
         pass_count = 0;
         fail_count = 0;
@@ -275,9 +247,7 @@ module tb_alu;
         @(posedge clk);
         @(posedge clk);
 
-        // -----------------------------------------------------------------
         // ADD tests
-        // -----------------------------------------------------------------
         $display("\n--- ADD Tests ---");
 
         // ADD: 0x42 + 0x13 = 0x55 (all widths)
@@ -315,9 +285,7 @@ module tb_alu;
         test_op("ADD -1 + 1 = 0 (D)", 64'hFFFFFFFF, 64'h1, OP_ADD, DW_D,
                 64'h0, 1'b1, 1'b0, 1'b0, 1'b1);
 
-        // -----------------------------------------------------------------
         // SUB tests
-        // -----------------------------------------------------------------
         $display("\n--- SUB Tests ---");
 
         // SUB: 0x55 - 0x13 = 0x42
@@ -343,9 +311,7 @@ module tb_alu;
                 64'h0000000080000000, 64'h1, OP_SUB, DW_D,
                 64'h000000007FFFFFFF, 1'b0, 1'b0, 1'b1, 1'b1);
 
-        // -----------------------------------------------------------------
         // MUL tests
-        // -----------------------------------------------------------------
         $display("\n--- MUL Tests ---");
 
         // MUL: 0x6 * 0x7 = 0x2A
@@ -374,9 +340,7 @@ module tb_alu;
         apply_op(64'h4, 64'h4, OP_MUL, DW_B);
         check_result_only("MUL 4*4=16 (B)", 64'h10);
 
-        // -----------------------------------------------------------------
         // DIV tests
-        // -----------------------------------------------------------------
         $display("\n--- DIV Tests ---");
 
         // DIV: 0x64 / 0xA = 0xA
@@ -399,9 +363,7 @@ module tb_alu;
         apply_op(64'hFFFFFFFFFFFFFFF6, 64'h2, OP_DIV, DW_Q);
         check_result_only("DIV -10/2 (Q)", 64'hFFFFFFFFFFFFFFF6 / 64'h2);
 
-        // -----------------------------------------------------------------
         // MOD tests
-        // -----------------------------------------------------------------
         $display("\n--- MOD Tests ---");
 
         // MOD: 0x64 % 0xA = 0x0
@@ -424,9 +386,7 @@ module tb_alu;
         apply_op(64'hFFFFFFFFFFFFFFF6, 64'h3, OP_MOD, DW_Q);
         check_result_only("MOD -10%%3 (Q)", 64'hFFFFFFFFFFFFFFF6 % 64'h3);
 
-        // -----------------------------------------------------------------
         // AND tests
-        // -----------------------------------------------------------------
         $display("\n--- AND Tests ---");
 
         test_op("AND 0xFF & 0x0F = 0x0F (Q)", 64'hFF, 64'h0F, OP_AND, DW_Q,
@@ -441,9 +401,7 @@ module tb_alu;
         test_op("AND 0xFF & 0xFF = 0xFF (B)", 64'hFF, 64'hFF, OP_AND, DW_B,
                 64'hFF, 1'b0, 1'b1, 1'b0, 1'b0);
 
-        // -----------------------------------------------------------------
         // OR tests
-        // -----------------------------------------------------------------
         $display("\n--- OR Tests ---");
 
         test_op("OR 0xF0 | 0x0F = 0xFF (Q)", 64'hF0, 64'h0F, OP_OR, DW_Q,
@@ -455,9 +413,7 @@ module tb_alu;
         test_op("OR 0x8000 | 0x0 = 0x8000 (W)", 64'h8000, 64'h0, OP_OR, DW_W,
                 64'h8000, 1'b0, 1'b1, 1'b0, 1'b0);
 
-        // -----------------------------------------------------------------
         // XOR tests
-        // -----------------------------------------------------------------
         $display("\n--- XOR Tests ---");
 
         test_op("XOR 0xFF ^ 0x0F = 0xF0 (Q)", 64'hFF, 64'h0F, OP_XOR, DW_Q,
@@ -469,9 +425,7 @@ module tb_alu;
         test_op("XOR 0x0 ^ 0x0 = 0 (Q)", 64'h0, 64'h0, OP_XOR, DW_Q,
                 64'h0, 1'b1, 1'b0, 1'b0, 1'b0);
 
-        // -----------------------------------------------------------------
         // NOT tests
-        // -----------------------------------------------------------------
         $display("\n--- NOT Tests ---");
 
         apply_op(64'hFFFFFFFF00000000, 64'h0, OP_NOT, DW_Q);
@@ -483,9 +437,7 @@ module tb_alu;
         apply_op(64'hAA, 64'h0, OP_NOT, DW_B);
         check_result_only("NOT 0xAA (B)", (~64'hAA) & MASK_B);
 
-        // -----------------------------------------------------------------
         // SHL tests
-        // -----------------------------------------------------------------
         $display("\n--- SHL Tests ---");
 
         test_op("SHL 0x1 << 4 = 0x10 (Q)", 64'h1, 64'h4, OP_SHL, DW_Q,
@@ -509,9 +461,7 @@ module tb_alu;
         apply_op(64'h1, 64'h10, OP_SHL, DW_B);
         check_result_only("SHL 0x1 << 16 (B, shift amount masked)", 64'h1);
 
-        // -----------------------------------------------------------------
         // SHR tests
-        // -----------------------------------------------------------------
         $display("\n--- SHR Tests ---");
 
         test_op("SHR 0x80 >> 4 = 0x08 (Q)", 64'h80, 64'h4, OP_SHR, DW_Q,
@@ -523,9 +473,7 @@ module tb_alu;
         test_op("SHR 0x1 >> 1 = 0 (Q)", 64'h1, 64'h1, OP_SHR, DW_Q,
                 64'h0, 1'b1, 1'b0, 1'b0, 1'b0);
 
-        // -----------------------------------------------------------------
         // SAR tests (arithmetic shift right)
-        // -----------------------------------------------------------------
         $display("\n--- SAR Tests ---");
 
         // SAR: sign extends from MSB of data width
@@ -543,9 +491,7 @@ module tb_alu;
         apply_op(64'h8000000000000000, 64'd4, OP_SAR, DW_Q);
         check_result_only("SAR 0x800...0 >> 4 (Q)", $signed(64'h8000000000000000) >>> 4);
 
-        // -----------------------------------------------------------------
         // ROL tests
-        // -----------------------------------------------------------------
         $display("\n--- ROL Tests ---");
 
         // ROL: B width (8-bit), 0x01 <<< 1 = 0x02
@@ -568,9 +514,7 @@ module tb_alu;
         apply_op(64'h8000, 64'h1, OP_ROL, DW_W);
         check_result_only("ROL 0x8000 <<< 1 (W, wrap)", 64'h0001);
 
-        // -----------------------------------------------------------------
         // ROR tests
-        // -----------------------------------------------------------------
         $display("\n--- ROR Tests ---");
 
         // ROR: B width, 0x01 >>> 1 = 0x80
@@ -585,9 +529,7 @@ module tb_alu;
         apply_op(64'h1, 64'h1, OP_ROR, DW_Q);
         check_result_only("ROR 0x1 >>> 1 (Q, wrap)", 64'h8000000000000000);
 
-        // -----------------------------------------------------------------
         // INC tests
-        // -----------------------------------------------------------------
         $display("\n--- INC Tests ---");
 
         test_op("INC 0x41 = 0x42 (Q)", 64'h41, 64'h0, OP_INC, DW_Q,
@@ -602,9 +544,7 @@ module tb_alu;
         test_op("INC 0x7F = 0x80 (B, overflow)", 64'h7F, 64'h0, OP_INC, DW_B,
                 64'h80, 1'b0, 1'b1, 1'b1, 1'b0);
 
-        // -----------------------------------------------------------------
         // DEC tests
-        // -----------------------------------------------------------------
         $display("\n--- DEC Tests ---");
 
         test_op("DEC 0x43 = 0x42 (Q)", 64'h43, 64'h0, OP_DEC, DW_Q,
@@ -619,9 +559,7 @@ module tb_alu;
         test_op("DEC 0x80 = 0x7F (B, overflow)", 64'h80, 64'h0, OP_DEC, DW_B,
                 64'h7F, 1'b0, 1'b0, 1'b1, 1'b0);
 
-        // -----------------------------------------------------------------
         // NEG tests
-        // -----------------------------------------------------------------
         $display("\n--- NEG Tests ---");
 
         apply_op(64'h5, 64'h0, OP_NEG, DW_Q);
@@ -638,9 +576,7 @@ module tb_alu;
         // -128 negated in 8-bit is still 0x80 (with overflow)
         check_all("NEG 0x80 overflow (B)", 64'h80, 1'b0, 1'b1, 1'b1, 1'b0);
 
-        // -----------------------------------------------------------------
         // ABS tests
-        // -----------------------------------------------------------------
         $display("\n--- ABS Tests ---");
 
         apply_op(64'h5, 64'h0, OP_ABS, DW_Q);
@@ -656,9 +592,7 @@ module tb_alu;
         apply_op(64'h80, 64'h0, OP_ABS, DW_B);
         check_all("ABS 0x80 overflow (B)", 64'h80, 1'b0, 1'b1, 1'b1, 1'b0);
 
-        // -----------------------------------------------------------------
         // CMP tests (result is always 0, flags come from subtraction)
-        // -----------------------------------------------------------------
         $display("\n--- CMP Tests ---");
 
         // CMP: equal -> zero flag set
@@ -686,9 +620,7 @@ module tb_alu;
         // 0x7F (127) vs 0x80 (-128 signed): 127 - (-128) overflows to -1 in 8-bit
         check_all("CMP 127 > -128 (B)", 64'h0, 1'b0, 1'b1, 1'b1, 1'b0);
 
-        // -----------------------------------------------------------------
         // TEST tests (result is always 0, flags from AND)
-        // -----------------------------------------------------------------
         $display("\n--- TEST Tests ---");
 
         // TEST: all bits match -> negative depends on AND result bit
@@ -711,9 +643,7 @@ module tb_alu;
         apply_op(64'h0000, 64'hFFFF, OP_TEST, DW_W);
         check_all("TEST 0x0000 & 0xFFFF (W)", 64'h0, 1'b1, 1'b0, 1'b0, 1'b0);
 
-        // -----------------------------------------------------------------
         // MIN tests (signed)
-        // -----------------------------------------------------------------
         $display("\n--- MIN Tests ---");
 
         apply_op(64'h5, 64'hA, OP_MIN, DW_Q);
@@ -732,9 +662,7 @@ module tb_alu;
         apply_op(64'h80, 64'h7F, OP_MIN, DW_B);
         check_result_only("MIN signed -128,127 = -128 (B)", 64'h80);
 
-        // -----------------------------------------------------------------
         // MAX tests (signed)
-        // -----------------------------------------------------------------
         $display("\n--- MAX Tests ---");
 
         apply_op(64'h5, 64'hA, OP_MAX, DW_Q);
@@ -749,9 +677,7 @@ module tb_alu;
         apply_op(64'hFFFFFFFFFFFFFFFF, 64'h0, OP_MAX, DW_Q);  // -1 vs 0
         check_result_only("MAX signed -1,0 = 0 (Q)", 64'h0);
 
-        // -----------------------------------------------------------------
         // MINU tests (unsigned)
-        // -----------------------------------------------------------------
         $display("\n--- MINU Tests ---");
 
         apply_op(64'h5, 64'hA, OP_MINU, DW_Q);
@@ -763,9 +689,7 @@ module tb_alu;
         apply_op(64'hFF, 64'h7F, OP_MINU, DW_B);
         check_result_only("MINU 255,127 = 127 (B)", 64'h7F);
 
-        // -----------------------------------------------------------------
         // MAXU tests (unsigned)
-        // -----------------------------------------------------------------
         $display("\n--- MAXU Tests ---");
 
         apply_op(64'h5, 64'hA, OP_MAXU, DW_Q);
@@ -777,9 +701,7 @@ module tb_alu;
         apply_op(64'hFF, 64'h7F, OP_MAXU, DW_B);
         check_result_only("MAXU 255,127 = 255 (B)", 64'hFF);
 
-        // -----------------------------------------------------------------
         // CLZ tests (count leading zeros)
-        // -----------------------------------------------------------------
         $display("\n--- CLZ Tests ---");
 
         // CLZ: B width, 0x01 = 7 leading zeros in 8-bit
@@ -810,9 +732,7 @@ module tb_alu;
         apply_op(64'h0001, 64'h0, OP_CLZ, DW_W);
         check_result_only("CLZ 0x0001 (W) = 15", 64'd15);
 
-        // -----------------------------------------------------------------
         // CTZ tests (count trailing zeros)
-        // -----------------------------------------------------------------
         $display("\n--- CTZ Tests ---");
 
         // CTZ: B width, 0x80 = 7 trailing zeros
@@ -839,9 +759,7 @@ module tb_alu;
         apply_op(64'h00000010, 64'h0, OP_CTZ, DW_D);
         check_result_only("CTZ 0x10 (D) = 4", 64'd4);
 
-        // -----------------------------------------------------------------
         // POPCNT tests (population count)
-        // -----------------------------------------------------------------
         $display("\n--- POPCNT Tests ---");
 
         // POPCNT: B width, 0xFF = 8 bits set
@@ -864,9 +782,7 @@ module tb_alu;
         apply_op(64'h0000FFFF, 64'h0, OP_POPCNT, DW_D);
         check_result_only("POPCNT 0x0000FFFF (D) = 16", 64'd16);
 
-        // -----------------------------------------------------------------
         // BSWAP tests (byte swap)
-        // -----------------------------------------------------------------
         $display("\n--- BSWAP Tests ---");
 
         // BSWAP: B width, just returns the same byte (single byte)
@@ -889,9 +805,7 @@ module tb_alu;
         apply_op(64'h0, 64'h0, OP_BSWAP, DW_Q);
         check_result_only("BSWAP 0 (Q)", 64'h0);
 
-        // -----------------------------------------------------------------
         // BITREV tests (bit reverse)
-        // -----------------------------------------------------------------
         $display("\n--- BITREV Tests ---");
 
         // BITREV: B width, 0x01 (00000001) -> 0x80 (10000000)
@@ -914,9 +828,7 @@ module tb_alu;
         apply_op(64'h0, 64'h0, OP_BITREV, DW_Q);
         check_result_only("BITREV 0 (Q) = 0", 64'h0);
 
-        // -----------------------------------------------------------------
         // SEXT_B tests (sign-extend byte)
-        // -----------------------------------------------------------------
         $display("\n--- SEXT_B Tests ---");
 
         // SEXT_B: 0x7F -> sign bit 0, extend to 64-bit positive
@@ -935,9 +847,7 @@ module tb_alu;
         apply_op(64'hFF, 64'h0, OP_SEXT_B, DW_Q);
         check_result_only("SEXT_B 0xFF (-1)", 64'hFFFFFFFFFFFFFFFF);
 
-        // -----------------------------------------------------------------
         // SEXT_W tests (sign-extend word/16-bit)
-        // -----------------------------------------------------------------
         $display("\n--- SEXT_W Tests ---");
 
         // SEXT_W: 0x7FFF -> positive
@@ -956,9 +866,7 @@ module tb_alu;
         apply_op(64'hFFFF, 64'h0, OP_SEXT_W, DW_Q);
         check_result_only("SEXT_W 0xFFFF (-1)", 64'hFFFFFFFFFFFFFFFF);
 
-        // -----------------------------------------------------------------
         // ZEXT_B tests (zero-extend byte)
-        // -----------------------------------------------------------------
         $display("\n--- ZEXT_B Tests ---");
 
         apply_op(64'h7F, 64'h0, OP_ZEXT_B, DW_Q);
@@ -973,9 +881,7 @@ module tb_alu;
         apply_op(64'h00, 64'h0, OP_ZEXT_B, DW_Q);
         check_result_only("ZEXT_B 0x00", 64'h0);
 
-        // -----------------------------------------------------------------
         // ZEXT_W tests (zero-extend word/16-bit)
-        // -----------------------------------------------------------------
         $display("\n--- ZEXT_W Tests ---");
 
         apply_op(64'h7FFF, 64'h0, OP_ZEXT_W, DW_Q);
@@ -990,9 +896,7 @@ module tb_alu;
         apply_op(64'h0000, 64'h0, OP_ZEXT_W, DW_Q);
         check_result_only("ZEXT_W 0x0000", 64'h0);
 
-        // =================================================================
         // SUMMARY
-        // =================================================================
         $display("\n============================================================");
         $display(" TEST SUMMARY");
         $display("============================================================");

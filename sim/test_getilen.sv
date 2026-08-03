@@ -7,17 +7,13 @@
 
 module tb_getilen;
 
-    // -------------------------------------------------------------------------
     // Parameters / Localparams
-    // -------------------------------------------------------------------------
     localparam CLK_PERIOD = 10;   // 10 ns clock period
 
     localparam logic [10:0] OPCODE_GETILEN = 11'h0FE;
     localparam logic [63:0] PAGE_FAULT_ADDR = 64'hF000;
 
-    // -------------------------------------------------------------------------
     // DUT signals
-    // -------------------------------------------------------------------------
     logic        clk;
     logic        rst_n;
     logic [10:0] opcode;
@@ -35,17 +31,12 @@ module tb_getilen;
     logic        result_valid;
     logic        busy;
 
-    // -------------------------------------------------------------------------
     // Memory model: byte-addressable array
-    // -------------------------------------------------------------------------
     logic [7:0] mem [0:255];
 
-    // -------------------------------------------------------------------------
     // Memory model: read-pending register (delayed mem_read)
-    // -------------------------------------------------------------------------
     logic mem_read_d;
 
-    // -------------------------------------------------------------------------
     // Memory model: page fault assertion timer
     //
     // When a read hits the page fault address, pf_timer is set to 3 so that
@@ -53,34 +44,25 @@ module tb_getilen;
     // The module samples mem_page_fault_i in:
     //   WAIT_READ — for exception_o assertion and state transition
     // pf_timer=3 → 3 cycles of assertion: READ_BYTE, WAIT_READ, DONE
-    // -------------------------------------------------------------------------
     logic [1:0] pf_timer;
 
-    // -------------------------------------------------------------------------
     // Test infrastructure
-    // -------------------------------------------------------------------------
     integer pass_count;
     integer fail_count;
     integer test_num;
 
-    // =====================================================================
     // Clock generation (10ns period)
-    // =====================================================================
     initial clk = 1'b0;
     always #(CLK_PERIOD / 2) clk = ~clk;
 
-    // =====================================================================
     // Reset generation (active low, 3 cycles)
-    // =====================================================================
     initial begin
         rst_n = 1'b0;
         repeat (3) @(posedge clk);
         rst_n = 1'b1;
     end
 
-    // =====================================================================
     // DUT instantiation
-    // =====================================================================
     misc_getilen #(
         .DATA_WIDTH(64),
         .ADDR_WIDTH(64)
@@ -103,9 +85,7 @@ module tb_getilen;
         .busy_o           (busy)
     );
 
-    // =====================================================================
     // Memory model: read delay
-    // =====================================================================
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)
             mem_read_d <= 1'b0;
@@ -113,9 +93,7 @@ module tb_getilen;
             mem_read_d <= mem_read;
     end
 
-    // =====================================================================
     // Memory model: page fault timer
-    // =====================================================================
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)
             pf_timer <= 2'b00;
@@ -125,20 +103,14 @@ module tb_getilen;
             pf_timer <= pf_timer - 2'b01;
     end
 
-    // =====================================================================
     // Memory model: response signals
-    // =====================================================================
     assign mem_ready      = mem_read_d && (mem_addr != PAGE_FAULT_ADDR);
     assign mem_page_fault = (pf_timer > 0);
 
-    // =====================================================================
     // Memory model: byte read from array
-    // =====================================================================
     assign mem_rdata = mem[mem_addr[7:0]];
 
-    // =====================================================================
     // Helper: initialize memory with default test values
-    // =====================================================================
     task automatic mem_init_default();
         // Default values for tests 1-4
         mem[8'h00] = 8'h00;   // 0x1000: bit[7:6]=00 → 2B
@@ -147,9 +119,7 @@ module tb_getilen;
         mem[8'h0C] = 8'hC0;   // 0x100C: bit[7:6]=11 → 8B
     endtask
 
-    // =====================================================================
     // Helper: drive idle (no instruction)
-    // =====================================================================
     task automatic drive_idle();
         opcode      <= 11'h000;
         rd_addr     <= 5'd0;
@@ -157,9 +127,7 @@ module tb_getilen;
         instr_valid <= 1'b0;
     endtask
 
-    // =====================================================================
     // Helper: check test result; report pass/fail
-    // =====================================================================
     task automatic check(
         input string       test_name,
         input logic [63:0] exp_result,
@@ -208,7 +176,6 @@ module tb_getilen;
         test_num = test_num + 1;
     endtask
 
-    // =====================================================================
     // Full GETILEN test: drive, wait for completion, check, return to idle
     //
     // State machine timing (4 cycles total):
@@ -221,7 +188,6 @@ module tb_getilen;
     // We use @(negedge clk) after each state-changing posedge to let
     // non-blocking assignments (NBA) settle before checking registered
     // and combinational outputs.
-    // =====================================================================
     task automatic test_getilen(
         input string       test_name,
         input logic [63:0] addr,
@@ -251,9 +217,7 @@ module tb_getilen;
         drive_idle();
     endtask
 
-    // =====================================================================
     // MAIN TEST SEQUENCE
-    // =====================================================================
     initial begin
         pass_count = 0;
         fail_count = 0;
@@ -274,47 +238,38 @@ module tb_getilen;
         $display(" MISC-2000 GETILEN Testbench");
         $display("============================================================");
 
-        // =================================================================
         // Test 1: GETILEN reads 2-byte instruction length
         //   - opcode = 0x0FE (vendor zone), target_addr = 0x1000
         //   - Memory returns 0x00 at 0x1000 (bit[7:6]=00 → 2B)
         //   - Verify result_o = 2, result_valid_o = 1, no exception
-        // =================================================================
         $display("\n--- Test 1: GETILEN reads 2-byte instruction length ---");
         test_getilen("GETILEN 2B (addr=0x1000, byte=0x00)",
                      64'h1000, 64'd2, 1'b1, 1'b0, 64'h0);
 
-        // =================================================================
         // Test 2: GETILEN reads 4-byte instruction length
         //   - target_addr = 0x1004
         //   - Memory returns 0x40 (bit[7:6]=01 → 4B)
         //   - Verify result_o = 4
-        // =================================================================
         $display("\n--- Test 2: GETILEN reads 4-byte instruction length ---");
         test_getilen("GETILEN 4B (addr=0x1004, byte=0x40)",
                      64'h1004, 64'd4, 1'b1, 1'b0, 64'h0);
 
-        // =================================================================
         // Test 3: GETILEN reads 6-byte instruction length
         //   - target_addr = 0x1008
         //   - Memory returns 0x80 (bit[7:6]=10 → 6B)
         //   - Verify result_o = 6
-        // =================================================================
         $display("\n--- Test 3: GETILEN reads 6-byte instruction length ---");
         test_getilen("GETILEN 6B (addr=0x1008, byte=0x80)",
                      64'h1008, 64'd6, 1'b1, 1'b0, 64'h0);
 
-        // =================================================================
         // Test 4: GETILEN reads 8-byte instruction length
         //   - target_addr = 0x100C
         //   - Memory returns 0xC0 (bit[7:6]=11 → 8B)
         //   - Verify result_o = 8
-        // =================================================================
         $display("\n--- Test 4: GETILEN reads 8-byte instruction length ---");
         test_getilen("GETILEN 8B (addr=0x100C, byte=0xC0)",
                      64'h100C, 64'd8, 1'b1, 1'b0, 64'h0);
 
-        // =================================================================
         // Test 5: GETILEN page fault
         //   - target_addr = 0xF000 (unmapped page)
         //   - Memory returns page fault
@@ -326,7 +281,6 @@ module tb_getilen;
         //   result_valid_o is high whenever state is ST_DONE (one cycle).
         //   exception_o is high for one cycle when entering DONE with a
         //   page fault. Both are sampled in the DONE state.
-        // =================================================================
         $display("\n--- Test 5: GETILEN page fault ---");
         begin
             logic pass;
@@ -385,11 +339,9 @@ module tb_getilen;
         // Extra wait cycles to ensure page fault timer clears
         repeat (4) @(posedge clk);
 
-        // =================================================================
         // Test 6: GETILEN busy signal
         //   - During GETILEN operation, verify busy_o = 1
         //   - After completion, verify busy_o = 0
-        // =================================================================
         $display("\n--- Test 6: GETILEN busy signal ---");
         begin
             logic pass;
@@ -449,11 +401,9 @@ module tb_getilen;
             @(posedge clk);
         end
 
-        // =================================================================
         // Test 7: GETILEN not triggered on wrong opcode
         //   - Set opcode = 0x000 (not GETILEN)
         //   - Verify no operation, result_valid_o = 0, busy_o = 0
-        // =================================================================
         $display("\n--- Test 7: GETILEN not triggered on wrong opcode ---");
         begin
             logic pass;
@@ -501,7 +451,6 @@ module tb_getilen;
             @(posedge clk);
         end
 
-        // =================================================================
         // Test 8: GETILEN with various bit patterns
         //
         //   Test that the instruction length decoder correctly handles
@@ -515,7 +464,6 @@ module tb_getilen;
         //
         //   We reuse addresses 0x1000-0x100C and reprogram the memory
         //   array before each sub-test.
-        // =================================================================
         $display("\n--- Test 8: GETILEN with various bit patterns ---");
 
         // Test 8a: 0x3F → 2B
@@ -538,9 +486,7 @@ module tb_getilen;
         test_getilen("GETILEN var. patterns: 0xFF → 8B (addr=0x100C)",
                      64'h100C, 64'd8, 1'b1, 1'b0, 64'h0);
 
-        // =================================================================
         // SUMMARY
-        // =================================================================
         $display("\n============================================================");
         $display(" TEST SUMMARY");
         $display("============================================================");

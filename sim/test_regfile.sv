@@ -7,16 +7,12 @@
 
 module tb_regfile;
 
-    // -----------------------------------------------------------------------
     // Parameters
-    // -----------------------------------------------------------------------
     localparam DATA_WIDTH = 64;
     localparam ADDR_WIDTH = 5;
     localparam NUM_REGS   = 32;
 
-    // -----------------------------------------------------------------------
     // DUT Signals
-    // -----------------------------------------------------------------------
     logic                       clk;
     logic                       rst_n;
     logic [ADDR_WIDTH-1:0]      rs1_addr;
@@ -28,9 +24,7 @@ module tb_regfile;
     logic [DATA_WIDTH-1:0]      rs1_data;
     logic [DATA_WIDTH-1:0]      rs2_data;
 
-    // -----------------------------------------------------------------------
     // DUT Instantiation
-    // -----------------------------------------------------------------------
     misc_regfile #(
         .DATA_WIDTH (DATA_WIDTH),
         .ADDR_WIDTH (ADDR_WIDTH),
@@ -48,22 +42,16 @@ module tb_regfile;
         .rs2_data_o (rs2_data)
     );
 
-    // -----------------------------------------------------------------------
     // Clock generation — 10 ns period, 5 ns high / 5 ns low
-    // -----------------------------------------------------------------------
     initial clk = 1'b0;
     always #5 clk = ~clk;
 
-    // -----------------------------------------------------------------------
     // Test control
-    // -----------------------------------------------------------------------
     // Global pass/fail tracking
     integer pass_cnt = 0;
     integer fail_cnt = 0;
 
-    // -----------------------------------------------------------------------
     // Helper tasks
-    // -----------------------------------------------------------------------
     task automatic write_reg(
         input int               addr,
         input logic [63:0]      data,
@@ -121,9 +109,7 @@ module tb_regfile;
         @(posedge clk);
     endtask
 
-    // -----------------------------------------------------------------------
     // Main test sequence
-    // -----------------------------------------------------------------------
     initial begin
         // Initialize all inputs
         rs1_addr  = '0;
@@ -138,15 +124,11 @@ module tb_regfile;
         $display("==============================================");
         $display("");
 
-        // ---------------------------------------------------------------
         // Apply reset
-        // ---------------------------------------------------------------
         $display("--- Applying reset ---");
         apply_reset();
 
-        // ---------------------------------------------------------------
         // Test 1: x0 reads as zero always
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 1: x0 reads as zero ---");
         read_port1(0);
@@ -156,9 +138,7 @@ module tb_regfile;
         #10;
         check_equal("x0 read via rs2", rs2_data, 64'h0);
 
-        // ---------------------------------------------------------------
         // Test 2: x0 writes are ignored
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 2: x0 writes are ignored ---");
         write_reg(0, 64'hDEAD, 3'd3);
@@ -167,9 +147,7 @@ module tb_regfile;
         #10;
         check_equal("x0 after write of 0xDEAD", rs1_data, 64'h0);
 
-        // ---------------------------------------------------------------
         // Test 3: Basic write/read to x1
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 3: Basic write/read to x1 ---");
         write_reg(1, 64'h1234567890ABCDEF, 3'd3);
@@ -178,9 +156,7 @@ module tb_regfile;
         #10;
         check_equal("x1 read after Q write", rs1_data, 64'h1234567890ABCDEF);
 
-        // ---------------------------------------------------------------
         // Test 4: Dual read — write different values to x1 and x2
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 4: Dual read (x1 and x2) ---");
         // x1 already has 0x1234567890ABCDEF, write new value to x2
@@ -191,9 +167,7 @@ module tb_regfile;
         check_equal("x1 dual read", rs1_data, 64'h1234567890ABCDEF);
         check_equal("x2 dual read", rs2_data, 64'hAABBCCDDEEFF0011);
 
-        // ---------------------------------------------------------------
         // Test 5: Sub-word write B (8-bit) to x3
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 5: Sub-word write B to x3 ---");
         // First write full value, then sub-word write
@@ -206,9 +180,7 @@ module tb_regfile;
         check_equal("x3 after B write of 0xAB", rs1_data,
                     64'hFFFFFFFFFFFFFFAB);
 
-        // ---------------------------------------------------------------
         // Test 6: Sub-word write W (16-bit) to x4
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 6: Sub-word write W to x4 ---");
         write_reg(4, 64'h7777777777777777, 3'd3);
@@ -220,9 +192,7 @@ module tb_regfile;
         check_equal("x4 after W write of 0xCDEF", rs1_data,
                     64'h777777777777CDEF);
 
-        // ---------------------------------------------------------------
         // Test 7: Sub-word write D (32-bit) to x5
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 7: Sub-word write D to x5 ---");
         write_reg(5, 64'hCCCCCCCCCCCCCCCC, 3'd3);
@@ -234,9 +204,7 @@ module tb_regfile;
         check_equal("x5 after D write of 0x12345678", rs1_data,
                     64'hCCCCCCCC12345678);
 
-        // ---------------------------------------------------------------
         // Test 8: Sub-word write Q (64-bit) to x6
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 8: Sub-word write Q to x6 ---");
         write_reg(6, 64'hFEDCBA9876543210, 3'd3);
@@ -246,9 +214,7 @@ module tb_regfile;
         check_equal("x6 after Q write of 0xFEDCBA9876543210", rs1_data,
                     64'hFEDCBA9876543210);
 
-        // ---------------------------------------------------------------
         // Test 9: Forwarding — write to x7, read in same cycle
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 9: Forwarding (write and read x7 same cycle) ---");
         // Pre-load x7 with a known value
@@ -277,9 +243,7 @@ module tb_regfile;
         check_equal("x7 committed after forward", rs1_data,
                     64'hDEADBEEFCAFEFACE);
 
-        // ---------------------------------------------------------------
         // Test 10: Forwarding with sub-word write
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 10: Forwarding with sub-word write to x8 ---");
         // Pre-load x8
@@ -333,9 +297,7 @@ module tb_regfile;
         rs1_addr  <= '0;
         @(posedge clk);
 
-        // ---------------------------------------------------------------
         // Test 11: Reset — assert reset, verify all registers cleared
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 11: Reset clears all registers ---");
         apply_reset();
@@ -353,9 +315,7 @@ module tb_regfile;
         #10;
         check_equal("x0 after reset", rs1_data, 64'h0);
 
-        // ---------------------------------------------------------------
         // Test 12: All 32 registers — write unique values and read back
-        // ---------------------------------------------------------------
         $display("");
         $display("--- Test 12: All 32 registers write/read ---");
 
@@ -382,9 +342,7 @@ module tb_regfile;
             check_equal(name, rs1_data, expected);
         end
 
-        // ---------------------------------------------------------------
         // Summary
-        // ---------------------------------------------------------------
         $display("");
         $display("==============================================");
         $display(" Test Summary");
