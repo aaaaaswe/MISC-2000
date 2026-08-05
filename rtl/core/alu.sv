@@ -135,7 +135,7 @@ module misc_alu (
     // Per-width carry/borrow extraction
     logic add_carry;
     logic sub_borrow;
-    always @(*) begin
+    always_comb begin
         case (data_width_i)
             3'd0:    add_carry = add_ext[8];
             3'd1:    add_carry = add_ext[16];
@@ -143,7 +143,7 @@ module misc_alu (
             default: add_carry = add_ext[64];
         endcase
     end
-    always @(*) begin
+    always_comb begin
         case (data_width_i)
             3'd0:    sub_borrow = sub_ext[8];
             3'd1:    sub_borrow = sub_ext[16];
@@ -215,7 +215,7 @@ module misc_alu (
     endfunction
 
     // Main ALU operation
-    always @(*) begin
+    always_comb begin
         raw_result   = 64'd0;
         raw_overflow = 1'b0;
         raw_carry    = 1'b0;
@@ -392,7 +392,7 @@ module misc_alu (
 
     // Negative flag: MSB within active data width
     logic neg_bit;
-    always @(*) begin
+    always_comb begin
         case (data_width_i)
             3'd0:    neg_bit = masked_result[7];
             3'd1:    neg_bit = masked_result[15];
@@ -401,7 +401,7 @@ module misc_alu (
         endcase
     end
     logic cmp_neg;
-    always @(*) begin
+    always_comb begin
         case (data_width_i)
             3'd0:    cmp_neg = sub_ext[7];
             3'd1:    cmp_neg = sub_ext[16];
@@ -410,7 +410,7 @@ module misc_alu (
         endcase
     end
     logic test_neg;
-    always @(*) begin
+    always_comb begin
         case (data_width_i)
             3'd0:    test_neg = op_a_m[7] & op_b_m[7];
             3'd1:    test_neg = op_a_m[15] & op_b_m[15];

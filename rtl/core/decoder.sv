@@ -64,10 +64,6 @@ module misc_decoder (
     localparam logic [10:0] SYSTEM_MAX    = 11'h7CF;
     localparam logic [10:0] SIMD_MIN_2    = 11'h7D0;
     localparam logic [10:0] SIMD_MAX_2    = 11'h7FF;
-    // Vendor extension range (reserved for future use within valid 11-bit opcode space)
-    // Note: 11'h800-11'h9FF exceeds 11-bit range; using valid 11-bit boundary.
-    localparam logic [10:0] VENDOR_EXT_MIN = 11'h7FF;
-    localparam logic [10:0] VENDOR_EXT_MAX = 11'h7FF;
 
     // Special opcodes with fixed addressing mode
     localparam logic [10:0] OP_DATA_XFER_IMM_1 = 11'h132;
@@ -170,18 +166,19 @@ module misc_decoder (
             inst_class_o  = CLASS_SYSTEM;
             addr_mode_o   = ADDR_IMM;
 
-        end else if ((opcode_i >= SIMD_MIN_1 && opcode_i <= SIMD_MAX_1) ||
-                     (opcode_i >= SIMD_MIN_2 && opcode_i <= SIMD_MAX_2)) begin
+        end else if (opcode_i >= SIMD_MIN_1 && opcode_i <= SIMD_MAX_1) begin
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SIMD;
             addr_mode_o   = ADDR_REG;
             data_type_o   = (opcode_i - SIMD_MIN_1) % 5;
 
-        end else if (opcode_i >= VENDOR_EXT_MIN && opcode_i <= VENDOR_EXT_MAX) begin
+        end else if (opcode_i >= SIMD_MIN_2 && opcode_i <= SIMD_MAX_2) begin
+            is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
-            inst_class_o  = CLASS_SYSTEM;
-            addr_mode_o   = ADDR_IMM;
+            inst_class_o  = CLASS_SIMD;
+            addr_mode_o   = ADDR_REG;
+            data_type_o   = (opcode_i - SIMD_MIN_2) % 5;
         end
     end
 
