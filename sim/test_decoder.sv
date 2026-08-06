@@ -340,13 +340,14 @@ module tb_decoder;
             11'h7BF, 4'd5, 3'd1, 3'd1, 8'd0, 1'b0, 1'b1, 1'b1);
 
         // SIMD upper range start (after System gap)
-        // offset=0xD0=208, 208%5=3
+        // offset from SIMD_MIN_2 (0x7D0): (0x7D0 - 0x7D0) = 0, 0%5=0
         test_opcode("SIMD post-gap (0x7D0)",
-            11'h7D0, 4'd5, 3'd1, 3'd3, 8'd0, 1'b0, 1'b1, 1'b1);
+            11'h7D0, 4'd5, 3'd1, 3'd0, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // SIMD last valid (offset=0xFF=255, 255%5=0)
+        // SIMD last valid: offset from SIMD_MIN_2 (0x7D0)
+        // (0x7FF - 0x7D0) = 0x2F = 47, 47%5=2
         test_opcode("SIMD last   (0x7FF)",
-            11'h7FF, 4'd5, 3'd1, 3'd0, 8'd0, 1'b0, 1'b1, 1'b1);
+            11'h7FF, 4'd5, 3'd1, 3'd2, 8'd0, 1'b0, 1'b1, 1'b1);
 
         // 8. System (late entries): 0x7C0 – 0x7CF
         //    These appear inside the SIMD numeric range but decode as System.
