@@ -314,7 +314,7 @@ module tb_decoder;
             11'h6FF, 4'd4, 3'd1, 3'd3, 8'd0, 1'b0, 1'b1, 1'b1);
 
         // 7. SIMD Vector: 0x700–0x7BF & 0x7D0–0x7FF
-        //    addr_mode always REG(1), data_type = (opcode - 0x700) % 5
+        //    addr_mode always REG(1), data_type = (opcode - SIMD_MIN_x) % 5
         //    System late entries (0x7C0–0x7CF) take priority over SIMD
         $display("--- SIMD Vector (0x700–0x7BF, 0x7D0–0x7FF) ---");
 
