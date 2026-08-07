@@ -16,9 +16,13 @@ module tb_atomic;
     localparam int CLK_PERIOD = 10;   // 10 ns
 
     // Opcode Constants
-    localparam logic [10:0] OP_LL_D    = 11'h040;
-    localparam logic [10:0] OP_SC_D    = 11'h041;
-    localparam logic [10:0] OP_CAS_IMM = 11'h144;
+    // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
+    // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC
+    localparam logic [10:0] OP_LL_D    = 11'h144;
+    localparam logic [10:0] OP_SC_D    = 11'h145;
+    localparam logic [10:0] OP_CAS_IMM = 11'h146;
+    localparam logic [10:0] OP_CAS_REG = 11'h147;
+    localparam logic [10:0] OP_CAS_DIR = 11'h148;
     localparam logic [10:0] OP_FENCE   = 11'h15E;
 
     // CSR Address Constants

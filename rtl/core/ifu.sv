@@ -48,13 +48,13 @@ module misc_ifu #(
     localparam int PAGE_MASK   = 12'hFFF;
 
     // Atomic instruction opcodes (4-byte, must not cross page boundary)
-    localparam logic [10:0] OP_LL_D      = 11'h040;
-    localparam logic [10:0] OP_SC_D      = 11'h041;
-    localparam logic [10:0] OP_CAS_IMM   = 11'h144;
-    localparam logic [10:0] OP_CAS_REG   = 11'h145;
-    localparam logic [10:0] OP_CAS_DIR   = 11'h146;
-    localparam logic [10:0] OP_CAS_IDX   = 11'h147;
-    localparam logic [10:0] OP_CAS_STK   = 11'h148;
+    // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
+    // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC
+    localparam logic [10:0] OP_LL_D      = 11'h144;
+    localparam logic [10:0] OP_SC_D      = 11'h145;
+    localparam logic [10:0] OP_CAS_IMM   = 11'h146;
+    localparam logic [10:0] OP_CAS_REG   = 11'h147;
+    localparam logic [10:0] OP_CAS_DIR   = 11'h148;
 
     // Exception cause encoding
     localparam logic [1:0] EXC_PAGE_FAULT       = 2'b00;
@@ -93,7 +93,7 @@ module misc_ifu #(
     function automatic logic is_atomic_opcode(input logic [10:0] opcode);
         is_atomic_opcode = (opcode == OP_LL_D) ||
                            (opcode == OP_SC_D) ||
-                           ((opcode >= OP_CAS_IMM) && (opcode <= OP_CAS_STK));
+                           ((opcode >= OP_CAS_IMM) && (opcode <= OP_CAS_DIR));
     endfunction
 
     // State machine + registers
@@ -179,7 +179,10 @@ module misc_ifu #(
 
                             if (is_atomic_opcode(mem_rdata_i[10:0])) begin
 
-                                if ((instr_start_addr[11:0] + 13'd4) >= PAGE_SIZE) begin
+                                // Atomic instructions must NOT cross a page boundary.
+                                // Check: start[11:0] + 4 > PAGE_SIZE means last byte > 0xFFF.
+                                // Using > (not >=): 0xFFC + 4 = 0x1000 is exactly on boundary, not crossing.
+                                if ((instr_start_addr[11:0] + 13'd4) > PAGE_SIZE) begin
                                     exception_o        <= 1'b1;
                                     exception_cause_o  <= EXC_ATOMIC_CROSS_PAGE;
                                     exception_addr_o   <= instr_start_addr;

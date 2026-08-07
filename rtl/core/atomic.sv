@@ -52,13 +52,13 @@ module misc_atomic #(
 );
 
     // Opcode definitions
-    localparam logic [10:0] OP_LL_D      = 11'h040;
-    localparam logic [10:0] OP_SC_D      = 11'h041;
-    localparam logic [10:0] OP_CAS_IMM   = 11'h144;
-    localparam logic [10:0] OP_CAS_REG   = 11'h145;
-    localparam logic [10:0] OP_CAS_DIR   = 11'h146;
-    localparam logic [10:0] OP_CAS_IDX   = 11'h147;
-    localparam logic [10:0] OP_CAS_STK   = 11'h148;
+    // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
+    // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC
+    localparam logic [10:0] OP_LL_D      = 11'h144;
+    localparam logic [10:0] OP_SC_D      = 11'h145;
+    localparam logic [10:0] OP_CAS_IMM   = 11'h146;
+    localparam logic [10:0] OP_CAS_REG   = 11'h147;
+    localparam logic [10:0] OP_CAS_DIR   = 11'h148;
     localparam logic [10:0] OP_FENCE     = 11'h15E;
 
     // State machine definitions
@@ -83,13 +83,14 @@ module misc_atomic #(
     assign is_sc    = (opcode_i == OP_SC_D);
     assign is_cas   = (opcode_i == OP_CAS_IMM) ||
                       (opcode_i == OP_CAS_REG) ||
-                      (opcode_i == OP_CAS_DIR) ||
-                      (opcode_i == OP_CAS_IDX) ||
-                      (opcode_i == OP_CAS_STK);
+                      (opcode_i == OP_CAS_DIR);
     assign is_fence = (opcode_i == OP_FENCE);
     assign is_atomic = is_ll || is_sc || is_cas || is_fence;
 
-    // Cross-page detection: atomics must not cross 4 KB boundary
+    // Cross-page detection: atomics must not cross 4 KB boundary.
+    // Last accessed byte is at inst_addr + (addr_offset - 1). Crossing means
+    // that byte is on the next page: inst_addr[11:0] + addr_offset > 4096.
+    // Using > (not >=): 0xFF8 + 8 = 0x1000 means last byte at 0xFFF, no crossing.
     logic [12:0] addr_offset;
     logic cross_page;
     always_comb begin
@@ -98,7 +99,7 @@ module misc_atomic #(
             64: addr_offset = 13'd8;
             default: addr_offset = 13'd4;
         endcase
-        cross_page = ({1'b0, inst_addr_i[11:0]} + addr_offset) >= 13'h1000;
+        cross_page = ({1'b0, inst_addr_i[11:0]} + addr_offset) > 13'h1000;
     end
 
     // Internal registers
