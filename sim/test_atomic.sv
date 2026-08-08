@@ -148,6 +148,7 @@ module tb_atomic;
         .exception_pc_i   ('0),
         .exception_ilen_i ('0),
         .exception_cause_i('0),
+        .exception_tval_i ('0),
         .eret_exec_i      (1'b0),
         .eret_target_o    (),
         .ll_exec_i        (ll_exec),

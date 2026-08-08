@@ -68,7 +68,7 @@ module misc_regfile #(
     wire [DATA_WIDTH-1:0] rf_rd_raw = regs[rd_addr_i];
     logic [DATA_WIDTH-1:0] fwd_data;
 
-    always @(*) begin
+    always_comb begin
         fwd_data = compose(rf_rd_raw, rd_data_i, rd_width_i);
     end
 

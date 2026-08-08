@@ -19,7 +19,8 @@ module misc_exception #(
     // Exception inputs from memory stage
     input  logic                     mem_exception_i,
     input  logic [1:0]               mem_exception_cause_i,
-    input  logic [ADDR_WIDTH-1:0]    mem_exception_addr_i,
+    input  logic [ADDR_WIDTH-1:0]    mem_instr_pc_i,      // instruction PC (for EPC)
+    input  logic [ADDR_WIDTH-1:0]    mem_exception_addr_i, // faulting data address (for ETVAL)
     input  logic [2:0]               mem_instr_len_i,
 
     // Exception inputs from decode stage
@@ -39,6 +40,7 @@ module misc_exception #(
     output logic [ADDR_WIDTH-1:0]    exception_pc_o,
     output logic [2:0]               exception_ilen_o,
     output logic [3:0]               exception_cause_o,
+    output logic [ADDR_WIDTH-1:0]    exception_tval_o,
 
     // Outputs to pipeline
     output logic                     flush_pipeline_o,
@@ -64,47 +66,56 @@ module misc_exception #(
     // Internal signals
     logic                        exception_detected;
     logic [ADDR_WIDTH-1:0]       selected_exc_pc;
+    logic [ADDR_WIDTH-1:0]       selected_exc_tval;
     logic [2:0]                  selected_exc_ilen;
     logic [3:0]                  selected_exc_cause;
     logic                        exception_active_q;
     logic [ADDR_WIDTH-1:0]       exception_pc_q;
+    logic [ADDR_WIDTH-1:0]       exception_tval_q;
     logic [2:0]                  exception_ilen_q;
     logic [3:0]                  exception_cause_q;
     logic                        take_exception;
 
     // Exception priority encoder
     // IFU page fault > mem page fault > illegal instr
+    // EPC = instruction address where the fault occurred (for return)
+    // ETVAL = faulting address / trap value (instruction addr for IFU, data addr for mem)
     always_comb begin
         exception_detected  = 1'b0;
         selected_exc_pc     = '0;
+        selected_exc_tval   = '0;
         selected_exc_ilen   = 3'b0;
         selected_exc_cause  = 4'b0;
 
         // Priority 1: IFU instruction page fault
         if (ifu_exception_i && (ifu_exception_cause_i == IFU_CAUSE_PAGE_FAULT)) begin
             exception_detected  = 1'b1;
-            selected_exc_pc     = ifu_exception_addr_i;
+            selected_exc_pc     = ifu_exception_addr_i;   // instruction start address
+            selected_exc_tval   = ifu_exception_addr_i;   // faulting fetch address
             selected_exc_ilen   = ifu_instr_len_i;
             selected_exc_cause  = EXC_CAUSE_INSTR_PAGE_FAULT;
         end
         // Priority 2: Memory (data) load/store page fault
         else if (mem_exception_i && (mem_exception_cause_i == MEM_CAUSE_PAGE_FAULT)) begin
             exception_detected  = 1'b1;
-            selected_exc_pc     = mem_exception_addr_i;
+            selected_exc_pc     = mem_instr_pc_i;         // instruction that caused the access
+            selected_exc_tval   = mem_exception_addr_i;   // faulting data address (ETVAL)
             selected_exc_ilen   = mem_instr_len_i;
             selected_exc_cause  = EXC_CAUSE_LDST_PAGE_FAULT;
         end
         // Priority 3: IFU illegal instruction / atomic cross-page
         else if (ifu_exception_i) begin
             exception_detected  = 1'b1;
-            selected_exc_pc     = ifu_exception_addr_i;
+            selected_exc_pc     = ifu_exception_addr_i;   // instruction start address
+            selected_exc_tval   = ifu_exception_addr_i;   // illegal instruction address
             selected_exc_ilen   = ifu_instr_len_i;
             selected_exc_cause  = EXC_CAUSE_ILLEGAL_INSTR;
         end
         // Priority 4: Decode illegal instruction
         else if (decode_exception_i) begin
             exception_detected  = 1'b1;
-            selected_exc_pc     = decode_exception_addr_i;
+            selected_exc_pc     = decode_exception_addr_i; // instruction address
+            selected_exc_tval   = decode_exception_addr_i; // same address for decode faults
             selected_exc_ilen   = decode_instr_len_i;
             selected_exc_cause  = EXC_CAUSE_ILLEGAL_INSTR;
         end
@@ -127,10 +138,12 @@ module misc_exception #(
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin
             exception_pc_q    <= '0;
+            exception_tval_q  <= '0;
             exception_ilen_q  <= 3'b0;
             exception_cause_q <= 4'b0;
         end else if (take_exception) begin
             exception_pc_q    <= selected_exc_pc;
+            exception_tval_q  <= selected_exc_tval;
             exception_ilen_q  <= selected_exc_ilen;
             exception_cause_q <= selected_exc_cause;
         end
@@ -138,6 +151,7 @@ module misc_exception #(
 
     // Output assignments
     assign exception_pc_o    = exception_pc_q;
+    assign exception_tval_o  = exception_tval_q;
     assign exception_ilen_o  = exception_ilen_q;
     assign exception_cause_o = exception_cause_q;
     assign exception_taken_o = take_exception;

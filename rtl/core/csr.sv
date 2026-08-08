@@ -23,6 +23,7 @@ module misc_csr #(
     input  logic [ADDR_WIDTH-1:0]        exception_pc_i,
     input  logic [2:0]                   exception_ilen_i,
     input  logic [3:0]                   exception_cause_i,
+    input  logic [ADDR_WIDTH-1:0]        exception_tval_i,
 
     // ERET interface
     input  logic                         eret_exec_i,
@@ -101,31 +102,41 @@ module misc_csr #(
             millen        <= 16'd0;
             mecause       <= 4'd0;
             metval        <= {ADDR_WIDTH{1'b0}};
-            mestatus       <= {DATA_WIDTH{1'b0}};
+            mestatus      <= {DATA_WIDTH{1'b0}};
             monitor_addr  <= {ADDR_WIDTH{1'b0}};
             monitor_valid <= 1'b0;
         end else begin
-            if (exception_taken_i) begin
-                mepc    <= exception_pc_i;
-                millen  <= decode_ilen(exception_ilen_i);
-                mecause <= exception_cause_i;
-                mestatus[MESTATUS_MPIE] <= mestatus[MESTATUS_MIE];
-                mestatus[MESTATUS_MIE]  <= 1'b0;
-            end
-
+            // Software CSR writes (lower priority than hardware events)
             if (csr_wen_i) begin
                 unique case (csr_addr_i)
-                    CSR_EPC:           mepc    <= csr_wdata_i[ADDR_WIDTH-1:0];
-                    CSR_ILLEN:         millen  <= csr_wdata_i[15:0];
-                    CSR_ECAUSE:        mecause <= csr_wdata_i[3:0];
-                    CSR_ETVAL:         metval  <= csr_wdata_i[ADDR_WIDTH-1:0];
-                    CSR_ESTATUS:       mestatus <= csr_wdata_i;
+                    CSR_EPC:           mepc         <= csr_wdata_i[ADDR_WIDTH-1:0];
+                    CSR_ILLEN:         millen       <= csr_wdata_i[15:0];
+                    CSR_ECAUSE:        mecause      <= csr_wdata_i[3:0];
+                    CSR_ETVAL:         metval       <= csr_wdata_i[ADDR_WIDTH-1:0];
+                    CSR_ESTATUS:       mestatus     <= csr_wdata_i;
                     CSR_MONITOR_ADDR:  monitor_addr <= csr_wdata_i[ADDR_WIDTH-1:0];
                     CSR_MONITOR_VALID: monitor_valid <= csr_wdata_i[0];
                     default: ;
                 endcase
             end
 
+            // Exception entry (higher priority than software writes)
+            if (exception_taken_i) begin
+                mepc    <= exception_pc_i;
+                millen  <= decode_ilen(exception_ilen_i);
+                mecause <= exception_cause_i;
+                metval  <= exception_tval_i;
+                mestatus[MESTATUS_MPIE] <= mestatus[MESTATUS_MIE];
+                mestatus[MESTATUS_MIE]  <= 1'b0;
+            end
+
+            // ERET (restore interrupt enables)
+            if (eret_exec_i) begin
+                mestatus[MESTATUS_MIE]  <= mestatus[MESTATUS_MPIE];
+                mestatus[MESTATUS_MPIE] <= 1'b1;
+            end
+
+            // LL/SC monitor (highest priority for monitor state)
             if (ll_exec_i) begin
                 monitor_addr  <= {ll_addr_i[ADDR_WIDTH-1:6], 6'b0};
                 monitor_valid <= 1'b1;
@@ -133,11 +144,6 @@ module misc_csr #(
 
             if (sc_exec_i) begin
                 monitor_valid <= 1'b0;
-            end
-
-            if (eret_exec_i) begin
-                mestatus[MESTATUS_MIE]  <= mestatus[MESTATUS_MPIE];
-                mestatus[MESTATUS_MPIE] <= 1'b1;
             end
 
             if (monitor_clear_i) begin

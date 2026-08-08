@@ -42,7 +42,8 @@ module tb_exception;
 
     logic                     mem_exception_i;
     logic [1:0]               mem_exception_cause_i;
-    logic [ADDR_WIDTH-1:0]    mem_exception_addr_i;
+    logic [ADDR_WIDTH-1:0]    mem_instr_pc_i;       // instruction PC (for EPC)
+    logic [ADDR_WIDTH-1:0]    mem_exception_addr_i; // faulting data address (for ETVAL)
     logic [2:0]               mem_instr_len_i;
 
     logic                     decode_exception_i;
@@ -55,6 +56,7 @@ module tb_exception;
     // misc_exception outputs
     logic                     exception_taken_o;
     logic [ADDR_WIDTH-1:0]    exception_pc_o;
+    logic [ADDR_WIDTH-1:0]    exception_tval_o;
     logic [2:0]               exception_ilen_o;
     logic [3:0]               exception_cause_o;
     logic                     flush_pipeline_o;
@@ -95,6 +97,7 @@ module tb_exception;
         .ifu_instr_len_i      (ifu_instr_len_i),
         .mem_exception_i      (mem_exception_i),
         .mem_exception_cause_i(mem_exception_cause_i),
+        .mem_instr_pc_i       (mem_instr_pc_i),
         .mem_exception_addr_i (mem_exception_addr_i),
         .mem_instr_len_i      (mem_instr_len_i),
         .decode_exception_i   (decode_exception_i),
@@ -105,6 +108,7 @@ module tb_exception;
         .csr_eret_target_i    (csr_eret_target),
         .exception_taken_o    (exception_taken_o),
         .exception_pc_o       (exception_pc_o),
+        .exception_tval_o     (exception_tval_o),
         .exception_ilen_o     (exception_ilen_o),
         .exception_cause_o    (exception_cause_o),
         .flush_pipeline_o     (flush_pipeline_o),
@@ -129,6 +133,7 @@ module tb_exception;
         .exception_pc_i    (exception_pc_o),
         .exception_ilen_i  (exception_ilen_o),
         .exception_cause_i (exception_cause_o),
+        .exception_tval_i  (exception_tval_o),
         .eret_exec_i       (eret_exec_i),
         .eret_target_o     (csr_eret_target),
         .ll_exec_i         (1'b0),
@@ -146,6 +151,7 @@ module tb_exception;
         ifu_instr_len_i        = 3'd0;
         mem_exception_i        = 1'b0;
         mem_exception_cause_i  = 2'b00;
+        mem_instr_pc_i         = '0;
         mem_exception_addr_i   = '0;
         mem_instr_len_i        = 3'd0;
         decode_exception_i     = 1'b0;
@@ -401,7 +407,8 @@ module tb_exception;
 
         mem_exception_i        = 1'b1;
         mem_exception_cause_i  = MEM_CAUSE_PAGE_FAULT;
-        mem_exception_addr_i   = 64'h2000;
+        mem_instr_pc_i         = 64'h2004;  // instruction PC that caused data access
+        mem_exception_addr_i   = 64'h2000;  // faulting data address (ETVAL)
         mem_instr_len_i        = 3'd1;
 
         #1;

@@ -88,19 +88,12 @@ module misc_atomic #(
     assign is_atomic = is_ll || is_sc || is_cas || is_fence;
 
     // Cross-page detection: atomics must not cross 4 KB boundary.
-    // Last accessed byte is at inst_addr + (addr_offset - 1). Crossing means
-    // that byte is on the next page: inst_addr[11:0] + addr_offset > 4096.
-    // Using > (not >=): 0xFF8 + 8 = 0x1000 means last byte at 0xFFF, no crossing.
-    logic [12:0] addr_offset;
+    // Spec: All atomic instructions (LL.D, SC.D, CAS.D) are 4-byte fixed length.
+    // Last byte is at inst_addr + 3: crossing if inst_addr[11:0] + 4 > 4096.
+    // Using > (not >=): 0xFFC + 4 = 0x1000 is exactly on boundary, not crossing.
+    localparam logic [12:0] ATOMIC_INST_BYTES = 13'd4;
     logic cross_page;
-    always_comb begin
-        unique case (DATA_WIDTH)
-            32: addr_offset = 13'd4;
-            64: addr_offset = 13'd8;
-            default: addr_offset = 13'd4;
-        endcase
-        cross_page = ({1'b0, inst_addr_i[11:0]} + addr_offset) > 13'h1000;
-    end
+    assign cross_page = ({1'b0, inst_addr_i[11:0]} + ATOMIC_INST_BYTES) > 13'h1000;
 
     // Internal registers
     logic [DATA_WIDTH-1:0]   read_data_q;      // data read from memory (LL / CAS)
@@ -236,7 +229,7 @@ module misc_atomic #(
                             state_d   = STATE_DONE;
                         end else if (is_cas_q) begin
                             if (mem_rdata_i == wdata_q) begin
-                                mem_wdata_o = wdata_q;
+                                mem_wdata_o = cas_new_val_q;
                                 mem_write_o = 1'b1;
                                 state_d     = STATE_WRITE;
                             end else begin
