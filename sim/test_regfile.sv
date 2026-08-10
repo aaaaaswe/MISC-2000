@@ -57,6 +57,9 @@ module tb_regfile;
         input logic [63:0]      data,
         input logic [2:0]       width = 3'd3
     );
+        // Pattern exactly matches Test 9 inline write (proven to work):
+        // align to clock, drive NBAs, then next edge samples.
+        @(posedge clk);
         rd_addr   <= addr[4:0];
         rd_data   <= data;
         rd_wen    <= 1'b1;
@@ -65,6 +68,7 @@ module tb_regfile;
         rd_wen    <= 1'b0;
         rd_addr   <= '0;
         rd_data   <= '0;
+        rd_width  <= 3'd3;
     endtask
 
     task automatic read_port1(

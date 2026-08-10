@@ -3,8 +3,6 @@
 // IFU Testbench: instruction lengths (2/4/6/8 bytes), cross-page detection,
 // page faults, pipeline control (flush/stall/branch), atomic cross-page.
 
-`include "../rtl/core/ifu.sv"
-
 `timescale 1ns / 1ps
 
 module tb_ifu;

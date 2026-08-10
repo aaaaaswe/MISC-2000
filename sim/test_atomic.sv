@@ -3,9 +3,6 @@
 // Atomic Instruction Testbench: tests LL.D, SC.D, CAS.D, cross-page detection,
 // FENCE, and page-fault handling.
 
-`include "../rtl/core/atomic.sv"
-`include "../rtl/core/csr.sv"
-
 `timescale 1ns / 1ps
 
 module tb_atomic;
@@ -444,7 +441,7 @@ module tb_atomic;
 
             // Read CSR_MONITOR_ADDR
             read_csr(CSR_MONITOR_ADDR, csr_data);
-            expected_monitor_addr = {64'h1000[63:6], 6'b0};  // 64-byte aligned
+            expected_monitor_addr = {ADDR_WIDTH{1'b0}} | (64'h1000 & ~(64'h3F));
             check_val("CSR_MONITOR_ADDR = 64-byte aligned 0x1000", csr_data[ADDR_WIDTH-1:0], expected_monitor_addr);
         end
 

@@ -3,8 +3,7 @@
 // Exception & CSR Testbench: tests entry, priority, ERET calculation,
 // CSR read/write, pipeline flush, exception-active state.
 
-`include "../rtl/core/exception.sv"
-`include "../rtl/core/csr.sv"
+`timescale 1ns / 1ps
 
 module tb_exception;
 

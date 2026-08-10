@@ -75,17 +75,63 @@ module misc_decoder (
     localparam logic [10:0] OP_PROG_CTRL_IMM_2  = 11'h696;
     localparam logic [10:0] OP_PROG_CTRL_IMM_3  = 11'h697;
 
-    function automatic logic [2:0] offset_to_mode(logic [10:0] off);
-        return 3'(off % MODES_PER_BASE);
-    endfunction
+    // Offset variables (declared outside always_comb to avoid
+    // iverilog "constant selects in always_* processes" warning)
+    logic [10:0] off_dx;
+    logic [10:0] off_ia;
+    logic [10:0] off_lo;
+    logic [10:0] off_fl;
+    logic [10:0] off_pc;
+    logic [10:0] off_simd1;
+    logic [10:0] off_simd2;
 
-    function automatic logic [2:0] offset_to_int_dtype(logic [10:0] off);
-        return 3'((off % OPS_PER_BASE) / MODES_PER_BASE);
-    endfunction
+    logic [2:0] m_dx_mode;
+    logic [2:0] m_dx_dtype;
+    logic [2:0] m_ia_mode;
+    logic [2:0] m_ia_dtype;
+    logic [2:0] m_lo_mode;
+    logic [2:0] m_lo_dtype;
+    logic [2:0] m_fl_mode;
+    logic [2:0] m_fl_dtype;
+    logic [2:0] m_pc_mode;
+    logic [2:0] m_simd1_dtype;
+    logic [2:0] m_simd2_dtype;
 
-    function automatic logic [2:0] offset_to_float_dtype(logic [10:0] off);
-        return 3'(4 + ((off % OPS_PER_BASE) / MODES_PER_BASE));
-    endfunction
+    logic is_special_dx;
+    logic is_special_pc;
+    logic [7:0] vendor_uop;
+
+    // Pre-compute all offsets and derived fields via continuous assigns
+    assign off_dx    = opcode_i - DATA_XFER_MIN;
+    assign off_ia    = opcode_i - INT_ARITH_MIN;
+    assign off_lo    = opcode_i - LOGIC_MIN;
+    assign off_fl    = opcode_i - FLOAT_MIN;
+    assign off_pc    = opcode_i - PROG_CTRL_MIN;
+    assign off_simd1 = opcode_i - SIMD_MIN_1;
+    assign off_simd2 = opcode_i - SIMD_MIN_2;
+
+    assign m_dx_mode  = 3'((off_dx)     % MODES_PER_BASE);
+    assign m_dx_dtype = 3'(((off_dx)    % OPS_PER_BASE) / MODES_PER_BASE);
+    assign m_ia_mode  = 3'((off_ia)     % MODES_PER_BASE);
+    assign m_ia_dtype = 3'(((off_ia)    % OPS_PER_BASE) / MODES_PER_BASE);
+    assign m_lo_mode  = 3'((off_lo)     % MODES_PER_BASE);
+    assign m_lo_dtype = 3'(((off_lo)    % OPS_PER_BASE) / MODES_PER_BASE);
+    assign m_fl_mode  = 3'((off_fl)     % MODES_PER_BASE);
+    assign m_fl_dtype = 3'(4 + (((off_fl) % OPS_PER_BASE) / MODES_PER_BASE));
+    assign m_pc_mode  = 3'((off_pc)     % MODES_PER_BASE);
+    assign m_simd1_dtype = 3'((off_simd1) % 5);
+    assign m_simd2_dtype = 3'((off_simd2) % 5);
+
+    assign is_special_dx = (opcode_i == OP_DATA_XFER_IMM_1) ||
+                           (opcode_i == OP_DATA_XFER_IMM_2) ||
+                           (opcode_i == OP_DATA_XFER_IMM_3) ||
+                           (opcode_i == OP_DATA_XFER_IMM_4) ||
+                           (opcode_i == OP_DATA_XFER_IMM_5);
+    assign is_special_pc = (opcode_i == OP_PROG_CTRL_IMM_1) ||
+                           (opcode_i == OP_PROG_CTRL_IMM_2) ||
+                           (opcode_i == OP_PROG_CTRL_IMM_3);
+
+    assign vendor_uop = opcode_i[7:0];
 
     // Decoding
     // Priority ordering: System late (0x7C0-0x7CF) before SIMD;
@@ -100,65 +146,44 @@ module misc_decoder (
         is_valid_o    = 1'b0;
 
         if (opcode_i <= VENDOR_MAX) begin
-            is_vendor_o  = 1'b1;
-            is_valid_o   = 1'b1;
-            inst_class_o = CLASS_VENDOR;
-            uop_code_o   = opcode_i[7:0];
+            is_vendor_o   = 1'b1;
+            is_valid_o    = 1'b1;
+            inst_class_o  = CLASS_VENDOR;
+            uop_code_o    = vendor_uop;
 
         end else if (opcode_i >= DATA_XFER_MIN && opcode_i <= DATA_XFER_MAX) begin
-            logic [10:0] off;
-            off = opcode_i - DATA_XFER_MIN;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_DATA_XFER;
-            data_type_o   = offset_to_int_dtype(off);
-            if (opcode_i == OP_DATA_XFER_IMM_1 || opcode_i == OP_DATA_XFER_IMM_2 ||
-                opcode_i == OP_DATA_XFER_IMM_3 || opcode_i == OP_DATA_XFER_IMM_4 ||
-                opcode_i == OP_DATA_XFER_IMM_5) begin
-                addr_mode_o = ADDR_IMM;
-            end else begin
-                addr_mode_o = offset_to_mode(off);
-            end
+            data_type_o   = m_dx_dtype;
+            addr_mode_o   = is_special_dx ? ADDR_IMM : m_dx_mode;
 
         end else if (opcode_i >= INT_ARITH_MIN && opcode_i <= INT_ARITH_MAX) begin
-            logic [10:0] off;
-            off = opcode_i - INT_ARITH_MIN;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_INT_ARITH;
-            addr_mode_o   = offset_to_mode(off);
-            data_type_o   = offset_to_int_dtype(off);
+            addr_mode_o   = m_ia_mode;
+            data_type_o   = m_ia_dtype;
 
         end else if (opcode_i >= LOGIC_MIN && opcode_i <= LOGIC_MAX) begin
-            logic [10:0] off;
-            off = opcode_i - LOGIC_MIN;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_LOGIC;
-            addr_mode_o   = offset_to_mode(off);
-            data_type_o   = offset_to_int_dtype(off);
+            addr_mode_o   = m_lo_mode;
+            data_type_o   = m_lo_dtype;
 
         end else if (opcode_i >= FLOAT_MIN && opcode_i <= FLOAT_MAX) begin
-            logic [10:0] off;
-            off = opcode_i - FLOAT_MIN;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_FLOAT;
-            addr_mode_o   = offset_to_mode(off);
-            data_type_o   = offset_to_float_dtype(off);
+            addr_mode_o   = m_fl_mode;
+            data_type_o   = m_fl_dtype;
 
         end else if (opcode_i >= PROG_CTRL_MIN && opcode_i <= PROG_CTRL_MAX) begin
-            logic [10:0] off;
-            off = opcode_i - PROG_CTRL_MIN;
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_PROG_CTRL;
-            if (opcode_i == OP_PROG_CTRL_IMM_1 || opcode_i == OP_PROG_CTRL_IMM_2 ||
-                opcode_i == OP_PROG_CTRL_IMM_3) begin
-                addr_mode_o = ADDR_IMM;
-            end else begin
-                addr_mode_o = offset_to_mode(off);
-            end
+            addr_mode_o   = is_special_pc ? ADDR_IMM : m_pc_mode;
 
         end else if (opcode_i >= SYSTEM_MIN && opcode_i <= SYSTEM_MAX) begin
             is_standard_o = 1'b1;
@@ -171,14 +196,14 @@ module misc_decoder (
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SIMD;
             addr_mode_o   = ADDR_REG;
-            data_type_o   = (opcode_i - SIMD_MIN_1) % 5;
+            data_type_o   = m_simd1_dtype;
 
         end else if (opcode_i >= SIMD_MIN_2 && opcode_i <= SIMD_MAX_2) begin
             is_standard_o = 1'b1;
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_SIMD;
             addr_mode_o   = ADDR_REG;
-            data_type_o   = (opcode_i - SIMD_MIN_2) % 5;
+            data_type_o   = m_simd2_dtype;
         end
     end
 

@@ -74,9 +74,9 @@ test_exception.vvp: $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_ex
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_exception.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_exception.sv
 
-test_atomic.vvp: $(RTL_DIR)/atomic.sv $(SIM_DIR)/test_atomic.sv
+test_atomic.vvp: $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_atomic.vvp ..."
-	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/atomic.sv $(SIM_DIR)/test_atomic.sv
+	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
 
 # ---- Run Targets -------------------------------------------------------------
 run_alu: $(VCD_DIR) test_alu.vvp
