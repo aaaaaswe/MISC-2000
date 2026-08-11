@@ -43,9 +43,7 @@ module misc_ifu #(
 );
 
     // Local parameters
-    localparam int PAGE_SHIFT  = 12;                // 4 KB page
-    localparam int PAGE_SIZE   = 13'h1000;
-    localparam int PAGE_MASK   = 12'hFFF;
+    localparam int PAGE_SIZE   = 13'h1000;          // 4 KB page
 
     // Atomic instruction opcodes (4-byte, must not cross page boundary)
     // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
@@ -84,10 +82,6 @@ module misc_ifu #(
     logic [1:0] instr_len_enc;      // 0,1,2,3 → 2,4,6,8 bytes
     logic [3:0] bytes_fetched;
     logic [3:0] total_bytes_needed;
-
-    // Combinational helpers
-    logic fetching_active;
-    assign fetching_active = (state == FETCH_FIRST) || (state == FETCH_REMAINING);
 
     // Check if opcode is an atomic instruction (LL.D, SC.D, or CAS.D variants)
     function automatic logic is_atomic_opcode(input logic [10:0] opcode);

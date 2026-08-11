@@ -22,29 +22,19 @@ module misc_regfile #(
     input  logic [2:0]                     rd_width_i
 );
 
-    localparam int W_B = 8;
-    localparam int W_W = 16;
-    localparam int W_D = 32;
-
     logic [DATA_WIDTH-1:0] regs [NUM_REGS-1:0];
 
     logic [DATA_WIDTH-1:0] rs1_raw;
     logic [DATA_WIDTH-1:0] rs2_raw;
     logic [DATA_WIDTH-1:0] rd_old;
-    logic [DATA_WIDTH-1:0] rd_written_b;
-    logic [DATA_WIDTH-1:0] rd_written_w;
-    logic [DATA_WIDTH-1:0] rd_written_d;
 
-    // Pre-compute each sub-word merge variant with continuous assigns
-    // (avoids iverilog "constant selects in always_* processes" warning)
+    // Continuous assigns for register reads (avoids iverilog
+    // "constant selects in always_* processes" warning)
     assign rs1_raw = (rs1_addr_i == '0) ? '0 : regs[rs1_addr_i];
     assign rs2_raw = (rs2_addr_i == '0) ? '0 : regs[rs2_addr_i];
     assign rd_old  = regs[rd_addr_i];
 
-    assign rd_written_b = {{(DATA_WIDTH-W_B){1'b0}}, rd_old[DATA_WIDTH-1:W_B]}
-                         & rd_old
-                       | {{(DATA_WIDTH-W_B){1'b0}}, rd_data_i[W_B-1:0]};
-    // Simpler direct mux per width:
+    // Per-width write-data merge:
     logic [DATA_WIDTH-1:0] wr_b;
     logic [DATA_WIDTH-1:0] wr_w;
     logic [DATA_WIDTH-1:0] wr_d;
