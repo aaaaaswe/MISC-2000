@@ -18,6 +18,7 @@ module misc_pipeline_ctrl #(
     // Fetch-stage inputs
     input  logic [OPCODE_WIDTH-1:0]      opcode_i,       // instruction opcode from fetch
     input  logic [ADDR_WIDTH-1:0]        pc_i,           // program counter from fetch
+    input  logic [2:0]                   instr_len_i,    // instruction length (encoded 0/1/2/3 → 2/4/6/8B, from IFU)
 
     // Decode-stage inputs
     input  logic [DATA_WIDTH-1:0]        rs1_data_i,     // register file read data 1
@@ -220,7 +221,10 @@ module misc_pipeline_ctrl #(
     assign stall_fetch_o  = stall_active;
     assign stall_decode_o = stall_active;
 
-    assign next_pc_o = branch_taken_i ? branch_target_i : (pc_i + {{ADDR_WIDTH-3}{1'b0}, 3'd4});
+    // Next-PC: branch redirect overrides; otherwise use variable-length increment
+    // (encoded 0→2, 1→4, 2→6, 3→8 bytes). Matches IFU: {len_enc, 1'b0} + 2.
+    assign next_pc_o = branch_taken_i ? branch_target_i
+                                      : (pc_i + {{(ADDR_WIDTH-3){1'b0}}, instr_len_i[1:0], 1'b0} + {{(ADDR_WIDTH-2){1'b0}}, 2'd2});
 
     always_ff @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) begin

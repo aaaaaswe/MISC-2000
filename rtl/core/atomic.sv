@@ -54,6 +54,8 @@ module misc_atomic #(
     // Opcode definitions
     // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
     // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC
+    // NOTE: Duplicated in ifu.sv + testbenches — kept in sync intentionally so
+    // each module + testbench compiles standalone without shared includes.
     localparam logic [10:0] OP_LL_D      = 11'h144;
     localparam logic [10:0] OP_SC_D      = 11'h145;
     localparam logic [10:0] OP_CAS_IMM   = 11'h146;

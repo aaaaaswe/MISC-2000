@@ -116,6 +116,8 @@ module misc_alu (
     logic [ 63:0] div_quotient;       // division quotient
     logic [ 63:0] div_remainder;      // division remainder (modulo)
 
+    logic [6:0] rot_amt;              // rotate amount (ROL/ROR, declared outside case for portability)
+
     // Sign-extended operands for signed operations
     logic signed [63:0] op_a_sext;
     logic signed [63:0] op_b_sext;
@@ -282,14 +284,12 @@ module misc_alu (
             end
 
             OP_ROL: begin
-                logic [6:0] rot_amt;
-                rot_amt = shift_amt % (7'(msb_pos) + 7'd1);
+                rot_amt = 7'(shift_amt) % (7'(msb_pos) + 7'd1);
                 raw_result = (op_a_m << rot_amt) | (op_a_m >> ((7'(msb_pos) + 7'd1) - rot_amt));
             end
 
             OP_ROR: begin
-                logic [6:0] rot_amt;
-                rot_amt = shift_amt % (7'(msb_pos) + 7'd1);
+                rot_amt = 7'(shift_amt) % (7'(msb_pos) + 7'd1);
                 raw_result = (op_a_m >> rot_amt) | (op_a_m << ((7'(msb_pos) + 7'd1) - rot_amt));
             end
 
