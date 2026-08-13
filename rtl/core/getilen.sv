@@ -51,7 +51,6 @@ module misc_getilen #(
     logic                       exception_q;        // Registered exception flag
     logic [ADDR_WIDTH-1:0]      exception_addr_q;   // Registered exception address
     logic                       result_valid_q;     // Registered result valid
-    logic                       page_fault_q;       // Latched page-fault flag
 
     // GETILEN instruction detection
     assign is_getilen = (opcode_i == OPCODE_GETILEN) && instr_valid_i;
@@ -73,7 +72,6 @@ module misc_getilen #(
             state_q          <= ST_IDLE;
             addr_q           <= {ADDR_WIDTH{1'b0}};
             result_q         <= {DATA_WIDTH{1'b0}};
-            page_fault_q     <= 1'b0;
             exception_q      <= 1'b0;
             exception_addr_q <= {ADDR_WIDTH{1'b0}};
             result_valid_q   <= 1'b0;
@@ -82,15 +80,14 @@ module misc_getilen #(
             result_valid_q   <= (state_next == ST_DONE);
 
             if (state_q == ST_IDLE && is_getilen) begin
-                addr_q       <= target_addr_i;
-                page_fault_q <= 1'b0;
+                addr_q <= target_addr_i;
             end
             if (state_q == ST_WAIT_READ && mem_ready_i && !mem_page_fault_i) begin
                 result_q <= decode_length(mem_rdata_i);
             end
 
             if (state_next == ST_DONE) begin
-                if (state_q == ST_WAIT_READ && mem_page_fault_i) begin
+                if (state_q == ST_WAIT_READ && mem_ready_i && mem_page_fault_i) begin
                     exception_q      <= 1'b1;
                     exception_addr_q <= addr_q;
                 end else begin
@@ -112,7 +109,7 @@ module misc_getilen #(
             end
 
             ST_WAIT_READ: begin
-                if (mem_ready_i || mem_page_fault_i)
+                if (mem_ready_i)
                     state_next = ST_DONE;
             end
 

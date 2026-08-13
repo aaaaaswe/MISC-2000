@@ -626,7 +626,7 @@ module tb_atomic;
         end
         $display("============================================================\n");
 
-        $stop;
+        $finish;
     end
 
     // Monitor: detect ll_exec and sc_exec pulses for verification

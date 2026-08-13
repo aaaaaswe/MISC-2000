@@ -37,14 +37,13 @@ module tb_getilen;
     // Memory model: read-pending register (delayed mem_read)
     logic mem_read_d;
 
-    // Memory model: page fault assertion timer
+    // Memory model: page fault flag
     //
-    // When a read hits the page fault address, pf_timer is set to 3 so that
-    // mem_page_fault_i stays asserted through both WAIT_READ and DONE states.
-    // The module samples mem_page_fault_i in:
-    //   WAIT_READ — for exception_o assertion and state transition
-    // pf_timer=3 → 3 cycles of assertion: READ_BYTE, WAIT_READ, DONE
-    logic [1:0] pf_timer;
+    // When a read hits the page fault address, pf_pending is set so that
+    // on the next response cycle mem_ready and mem_page_fault are asserted
+    // together (standard bus convention: page_fault is qualified by ready,
+    // matching the atomic.sv testbench memory model).
+    logic pf_pending;
 
     // Test infrastructure
     integer pass_count;
@@ -93,19 +92,21 @@ module tb_getilen;
             mem_read_d <= mem_read;
     end
 
-    // Memory model: page fault timer
+    // Memory model: page fault pending latch
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)
-            pf_timer <= 2'b00;
+            pf_pending <= 1'b0;
         else if (mem_read && (mem_addr == PAGE_FAULT_ADDR))
-            pf_timer <= 2'b11;
-        else if (pf_timer > 0)
-            pf_timer <= pf_timer - 2'b01;
+            pf_pending <= 1'b1;
+        else if (mem_read_d)
+            pf_pending <= 1'b0;
     end
 
     // Memory model: response signals
-    assign mem_ready      = mem_read_d && (mem_addr != PAGE_FAULT_ADDR);
-    assign mem_page_fault = (pf_timer > 0);
+    // Standard bus convention: mem_ready pulses on a response;
+    // mem_page_fault is only meaningful alongside mem_ready.
+    assign mem_ready      = mem_read_d;
+    assign mem_page_fault = mem_read_d && pf_pending;
 
     // Memory model: byte read from array
     assign mem_rdata = mem[mem_addr[7:0]];
@@ -178,11 +179,15 @@ module tb_getilen;
 
     // Full GETILEN test: drive, wait for completion, check, return to idle
     //
-    // State machine timing (4 cycles total):
-    //   posedge 0: Drive signals.  is_getilen=1 → next=READ_BYTE
-    //   posedge 1: READ_BYTE (mem_read_o=1) → next=WAIT_READ
-    //   posedge 2: WAIT_READ (memory responds) → next=DONE
-    //   posedge 3: DONE (result_valid_o=1, exception checked) → next=IDLE
+    // State machine timing (3-state machine, 4 posedges from start to IDLE):
+    //   posedge 0: Drive signals.  is_getilen=1 → IDLE → WAIT_READ
+    //              (mem_read_o is registered, becomes visible next cycle)
+    //   posedge 1: In WAIT_READ.  Memory sees request, asserts mem_read_d
+    //              internally.  One-cycle latency — no response yet.
+    //   posedge 2: WAIT_READ → DONE.  Testbench asserts mem_ready alongside
+    //              page_fault (if applicable).  result_valid / exception
+    //              are registered on this edge into DONE outputs.
+    //   posedge 3: In DONE → outputs sampled → DONE → IDLE on posedge 3.
     //   posedge 4: IDLE (busy_o=0)
     //
     // We use @(negedge clk) after each state-changing posedge to let
@@ -201,19 +206,19 @@ module tb_getilen;
         rd_addr     <= 5'd0;
         target_addr <= addr;
         instr_valid <= 1'b1;
-        @(posedge clk);   // → READ_BYTE
+        @(posedge clk);   // IDLE → WAIT_READ
         @(negedge clk);   // let NBA settle
 
-        @(posedge clk);   // → WAIT_READ
+        @(posedge clk);   // WAIT_READ (memory latches request)
         @(negedge clk);   // let NBA settle
 
-        @(posedge clk);   // → DONE
+        @(posedge clk);   // WAIT_READ → DONE (results registered)
         @(negedge clk);   // let NBA settle — results now valid
 
         check(test_name, exp_result, exp_result_valid,
               exp_exception, exp_exception_addr);
 
-        @(posedge clk);   // → IDLE
+        @(posedge clk);   // DONE → IDLE
         drive_idle();
     endtask
 
@@ -272,7 +277,8 @@ module tb_getilen;
 
         // Test 5: GETILEN page fault
         //   - target_addr = 0xF000 (unmapped page)
-        //   - Memory returns page fault
+        //   - Memory responds with mem_ready + mem_page_fault together
+        //     (standard bus convention, same as atomic testbench)
         //   - Verify exception_o = 1, exception_addr_o = 0xF000
         //   - Verify result_valid_o = 1 (registered output, high in DONE state
         //     regardless of page fault)
@@ -280,7 +286,7 @@ module tb_getilen;
         // NOTE: exception_o and result_valid_o are both registered outputs.
         //   result_valid_o is high whenever state is ST_DONE (one cycle).
         //   exception_o is high for one cycle when entering DONE with a
-        //   page fault. Both are sampled in the DONE state.
+        //   page_fault qualified by mem_ready_i. Both are sampled in DONE.
         $display("\n--- Test 5: GETILEN page fault ---");
         begin
             logic pass;
@@ -291,13 +297,14 @@ module tb_getilen;
             rd_addr     <= 5'd0;
             target_addr <= 64'hF000;
             instr_valid <= 1'b1;
-            @(posedge clk);   // → READ_BYTE
+            @(posedge clk);   // IDLE → WAIT_READ
             @(negedge clk);   // let NBA settle
 
-            @(posedge clk);   // → WAIT_READ
+            @(posedge clk);   // WAIT_READ (memory latches, pf_pending set)
             @(negedge clk);   // let NBA settle
 
-            @(posedge clk);   // → DONE (page_fault), exception_q set on this edge
+            @(posedge clk);   // WAIT_READ → DONE (mem_ready + page_fault
+                              // arrive together; exception_q registered)
             @(negedge clk);   // let NBA settle — exception_o should be asserted here
 
             // Check exception after it's been registered
@@ -352,25 +359,25 @@ module tb_getilen;
             rd_addr     <= 5'd0;
             target_addr <= 64'h1000;
             instr_valid <= 1'b1;
-            @(posedge clk);   // → READ_BYTE
+            @(posedge clk);   // IDLE → WAIT_READ
             @(negedge clk);   // let NBA settle
 
-            // Cycle 1: READ_BYTE — busy should be 1
+            // Cycle 1: WAIT_READ — busy should be 1
             if (busy !== 1'b1) begin
-                $display("[%0d] FAIL: GETILEN busy during READ_BYTE", test_num);
+                $display("[%0d] FAIL: GETILEN busy during WAIT_READ (cycle 1)", test_num);
                 $display("       busy_o: expected 1, got %b", busy);
                 pass = 1'b0;
             end
-            @(posedge clk);   // → WAIT_READ
+            @(posedge clk);   // still WAIT_READ (memory latency cycle)
             @(negedge clk);   // let NBA settle
 
-            // Cycle 2: WAIT_READ — busy should be 1
+            // Cycle 2: WAIT_READ (memory responds) → next DONE — busy should be 1
             if (busy !== 1'b1) begin
-                if (pass) $display("[%0d] FAIL: GETILEN busy during WAIT_READ", test_num);
+                if (pass) $display("[%0d] FAIL: GETILEN busy during WAIT_READ (cycle 2)", test_num);
                 $display("       busy_o: expected 1, got %b", busy);
                 pass = 1'b0;
             end
-            @(posedge clk);   // → DONE
+            @(posedge clk);   // WAIT_READ → DONE
             @(negedge clk);   // let NBA settle
 
             // Cycle 3: DONE — busy should still be 1

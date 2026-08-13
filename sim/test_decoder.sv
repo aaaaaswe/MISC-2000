@@ -384,7 +384,7 @@ module tb_decoder;
         else
             $display(" SOME TESTS FAILED");
 
-        $stop;
+        $finish;
     end
 
 endmodule

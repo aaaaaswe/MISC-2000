@@ -361,7 +361,7 @@ module tb_regfile;
             $display("SOME TESTS FAILED");
         end
 
-        $stop;
+        $finish;
     end
 
 endmodule

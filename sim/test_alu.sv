@@ -913,7 +913,7 @@ module tb_alu;
         end
         $display("============================================================\n");
 
-        $stop;
+        $finish;
     end
 
 endmodule
