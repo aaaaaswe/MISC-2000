@@ -43,7 +43,11 @@ module misc_ifu #(
 );
 
     // Local parameters
-    localparam int PAGE_SIZE   = 13'h1000;          // 4 KB page
+    // PAGE_SIZE declared as explicit 13-bit unsigned (not int) to match the
+    // 13-bit addition expression used in the atomic cross-page check below
+    // ({instr_start_addr[11:0], 13'd4} > PAGE_SIZE). Avoids mixed signedness
+    // comparison against a signed 32-bit `int` — same numeric value (4096).
+    localparam logic [12:0] PAGE_SIZE = 13'h1000;  // 4 KB page
 
     // Atomic instruction opcodes (4-byte, must not cross page boundary)
     // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)

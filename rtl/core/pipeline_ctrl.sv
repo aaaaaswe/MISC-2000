@@ -117,6 +117,17 @@ module misc_pipeline_ctrl #(
     logic                    advance_pipe;
     logic [1:0]              next_state;
 
+    // Special opcode constants (atomic + GETILEN)
+    // NOTE: Duplicated from ifu.sv / atomic.sv / getilen.sv — kept in sync
+    // intentionally so pipeline_ctrl compiles standalone without shared includes.
+    localparam logic [10:0] OP_LL_D       = 11'h144;
+    localparam logic [10:0] OP_SC_D       = 11'h145;
+    localparam logic [10:0] OP_CAS_IMM    = 11'h146;
+    localparam logic [10:0] OP_CAS_REG    = 11'h147;
+    localparam logic [10:0] OP_CAS_DIR    = 11'h148;
+    localparam logic [10:0] OP_FENCE      = 11'h15E;
+    localparam logic [10:0] OP_GETILEN    = 11'h0FE;
+
     // Instruction decode helpers
     logic [4:0]  decode_rs1_addr;
     logic [4:0]  decode_rs2_addr;
@@ -125,6 +136,15 @@ module misc_pipeline_ctrl #(
     logic        decode_reg_write;
     logic        decode_mem_read;
     logic        decode_mem_write;
+    logic        is_atomic_op;
+    logic        is_getilen_op;
+
+    // Atomic-opcode detector (matches ifu.sv / atomic.sv)
+    assign is_atomic_op = (fd_opcode == OP_LL_D) ||
+                          (fd_opcode == OP_SC_D) ||
+                          ((fd_opcode >= OP_CAS_IMM) && (fd_opcode <= OP_CAS_DIR)) ||
+                          (fd_opcode == OP_FENCE);
+    assign is_getilen_op = (fd_opcode == OP_GETILEN);
 
     always_comb begin
         decode_rs1_addr  = 5'd0;
@@ -135,7 +155,33 @@ module misc_pipeline_ctrl #(
         decode_mem_read  = 1'b0;
         decode_mem_write = 1'b0;
 
-        if (fd_opcode >= 11'h100 && fd_opcode <= 11'h1FF) begin
+        // GETILEN (vendor zone, opcode 0x0FE) — handled by dedicated getilen.sv.
+        // Pipeline_ctrl does NOT issue mem_read here; the getilen module owns
+        // the byte-level read. We only set rs1 (target address comes from reg)
+        // and rd (write result back) so the register-file ports are routed.
+        // Trade-off: skip addr-mode decoding and trust the getilen module to
+        // interpret operand fields, matching the module-level testbench.
+        if (is_getilen_op) begin
+            decode_rs1_addr  = fd_opcode[4:0];
+            decode_rd_addr   = fd_opcode[9:5];
+            decode_reg_write = 1'b1;
+
+        // Atomic instructions (0x144–0x148 + FENCE 0x15E) — handled by
+        // dedicated atomic.sv. We suppress standard mem_read/mem_write here
+        // (atomic module generates its own memory commands) but keep rd_addr
+        // routed so result writeback works for LL/SC/CAS. FENCE writes no reg.
+        end else if (is_atomic_op) begin
+            decode_rs1_addr  = fd_opcode[4:0];
+            decode_rs2_addr  = fd_opcode[9:5];
+            // LL.D / CAS.* write the loaded / compare value back to rd.
+            // SC.D writes 0 (success) or non-zero (failure) to rd.
+            // FENCE writes nothing.
+            if (fd_opcode != OP_FENCE) begin
+                decode_rd_addr   = fd_opcode[4:0];
+                decode_reg_write = 1'b1;
+            end
+
+        end else if (fd_opcode >= 11'h100 && fd_opcode <= 11'h1FF) begin
             decode_rs1_addr  = fd_opcode[4:0];
             decode_rs2_addr  = fd_opcode[9:5];
             decode_rd_addr   = fd_opcode[4:0];

@@ -54,8 +54,10 @@ module misc_exception #(
     localparam logic [3:0] EXC_CAUSE_INSTR_PAGE_FAULT  = 4'hC;
     localparam logic [3:0] EXC_CAUSE_LDST_PAGE_FAULT   = 4'hD;
 
-    // IFU exception cause encoding (from IFU)
+    // IFU exception cause encoding (mirrors ifu.sv localparams EXC_*)
     localparam logic [1:0] IFU_CAUSE_PAGE_FAULT        = 2'b00;
+    localparam logic [1:0] IFU_CAUSE_ILLEGAL_INSTR     = 2'b01;
+    localparam logic [1:0] IFU_CAUSE_ATOMIC_CROSS_PAGE = 2'b10;
 
     // Memory exception cause encoding (from memory stage)
     localparam logic [1:0] MEM_CAUSE_PAGE_FAULT        = 2'b00;
@@ -103,15 +105,27 @@ module misc_exception #(
             selected_exc_ilen   = mem_instr_len_i;
             selected_exc_cause  = EXC_CAUSE_LDST_PAGE_FAULT;
         end
-        // Priority 3: IFU illegal instruction / atomic cross-page
-        else if (ifu_exception_i) begin
+        // Priority 3: IFU illegal instruction
+        else if (ifu_exception_i && (ifu_exception_cause_i == IFU_CAUSE_ILLEGAL_INSTR)) begin
             exception_detected  = 1'b1;
             selected_exc_pc     = ifu_exception_addr_i;   // instruction start address
             selected_exc_tval   = ifu_exception_addr_i;   // illegal instruction address
             selected_exc_ilen   = ifu_instr_len_i;
             selected_exc_cause  = EXC_CAUSE_ILLEGAL_INSTR;
         end
-        // Priority 4: Decode illegal instruction
+        // Priority 4: IFU atomic instruction crossed page boundary.
+        // Per spec (Requirement: 原子指令禁止跨页), this is deliberately mapped
+        // to the same cause code as a regular illegal-instruction trap so the
+        // standard exception-vector handler path is reused. Software that needs
+        // to distinguish the sub-case can inspect the opcode byte at EPC.
+        else if (ifu_exception_i && (ifu_exception_cause_i == IFU_CAUSE_ATOMIC_CROSS_PAGE)) begin
+            exception_detected  = 1'b1;
+            selected_exc_pc     = ifu_exception_addr_i;   // instruction start address
+            selected_exc_tval   = ifu_exception_addr_i;   // faulting instruction addr
+            selected_exc_ilen   = ifu_instr_len_i;        // always LEN_4B for atomics
+            selected_exc_cause  = EXC_CAUSE_ILLEGAL_INSTR;
+        end
+        // Priority 5: Decode illegal instruction
         else if (decode_exception_i) begin
             exception_detected  = 1'b1;
             selected_exc_pc     = decode_exception_addr_i; // instruction address

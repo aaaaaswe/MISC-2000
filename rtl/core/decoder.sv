@@ -70,10 +70,24 @@ module misc_decoder (
     localparam logic [10:0] OP_DATA_XFER_IMM_2 = 11'h133;
     localparam logic [10:0] OP_DATA_XFER_IMM_3 = 11'h134;
     localparam logic [10:0] OP_DATA_XFER_IMM_4 = 11'h15D;
-    localparam logic [10:0] OP_DATA_XFER_IMM_5 = 11'h15E;
+    // NOTE: OP_DATA_XFER_IMM_5 removed — 0x15E is FENCE (atomic system instr).
     localparam logic [10:0] OP_PROG_CTRL_IMM_1  = 11'h695;
     localparam logic [10:0] OP_PROG_CTRL_IMM_2  = 11'h696;
     localparam logic [10:0] OP_PROG_CTRL_IMM_3  = 11'h697;
+
+    // Atomic / system-sync opcodes — fall numerically in DATA_XFER range
+    // but are semantically system-level instructions. Routed to CLASS_SYSTEM
+    // with a higher-priority match so downstream logic does not treat them
+    // as plain load/stores. Trade-off: keep existing 4-bit CLASS_* encoding
+    // (no interface change) by reusing CLASS_SYSTEM rather than adding a
+    // dedicated CLASS_ATOMIC; CLASS_SYSTEM already reserved for 0x7C0–0x7CF.
+    localparam logic [10:0] OP_LL_D       = 11'h144;
+    localparam logic [10:0] OP_SC_D       = 11'h145;
+    localparam logic [10:0] OP_CAS_IMM    = 11'h146;
+    localparam logic [10:0] OP_CAS_REG    = 11'h147;
+    localparam logic [10:0] OP_CAS_DIR    = 11'h148;
+    localparam logic [10:0] OP_FENCE      = 11'h15E;
+    localparam logic [10:0] OP_GETILEN    = 11'h0FE;
 
     // Offset variables (declared outside always_comb to avoid
     // iverilog "constant selects in always_* processes" warning)
@@ -125,11 +139,17 @@ module misc_decoder (
     assign is_special_dx = (opcode_i == OP_DATA_XFER_IMM_1) ||
                            (opcode_i == OP_DATA_XFER_IMM_2) ||
                            (opcode_i == OP_DATA_XFER_IMM_3) ||
-                           (opcode_i == OP_DATA_XFER_IMM_4) ||
-                           (opcode_i == OP_DATA_XFER_IMM_5);
+                           (opcode_i == OP_DATA_XFER_IMM_4);
     assign is_special_pc = (opcode_i == OP_PROG_CTRL_IMM_1) ||
                            (opcode_i == OP_PROG_CTRL_IMM_2) ||
                            (opcode_i == OP_PROG_CTRL_IMM_3);
+
+    // Atomic / sync opcode classification helper (matches pipeline_ctrl/ifu)
+    logic is_atomic_op;
+    assign is_atomic_op = (opcode_i == OP_LL_D) ||
+                          (opcode_i == OP_SC_D) ||
+                          ((opcode_i >= OP_CAS_IMM) && (opcode_i <= OP_CAS_DIR)) ||
+                          (opcode_i == OP_FENCE);
 
     assign vendor_uop = opcode_i[7:0];
 
@@ -150,6 +170,19 @@ module misc_decoder (
             is_valid_o    = 1'b1;
             inst_class_o  = CLASS_VENDOR;
             uop_code_o    = vendor_uop;
+
+        // Atomic / sync opcodes — higher priority than general DATA_XFER
+        // range so they do not inherit plain load/store class or dtype.
+        // Classification: CLASS_SYSTEM (semantic match: system sync primitives).
+        // Addressing mode: ADDR_REG (atomics take register operands; FENCE
+        // does not use the standard memory path so the value is cosmetic
+        // but kept consistent with atomic.sv expectations).
+        end else if (is_atomic_op) begin
+            is_standard_o = 1'b1;
+            is_valid_o    = 1'b1;
+            inst_class_o  = CLASS_SYSTEM;
+            addr_mode_o   = ADDR_REG;
+            data_type_o   = DTYPE_D;
 
         end else if (opcode_i >= DATA_XFER_MIN && opcode_i <= DATA_XFER_MAX) begin
             is_standard_o = 1'b1;
