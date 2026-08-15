@@ -164,10 +164,20 @@ module misc_exception #(
     end
 
     // Output assignments
-    assign exception_pc_o    = exception_pc_q;
-    assign exception_tval_o  = exception_tval_q;
-    assign exception_ilen_o  = exception_ilen_q;
-    assign exception_cause_o = exception_cause_q;
+    // NOTE: exception_pc_o / exception_tval_o / exception_ilen_o /
+    // exception_cause_o are COMBINATIONAL (selected_exc_*), not the
+    // registered exception_*_q variants.  The downstream CSR module
+    // uses exception_taken_i (which is the comb pulse take_exception,
+    // assigned below) as its always_ff write-gate, and samples these
+    // info signals on the same posedge.  If these outputs were
+    // registered they would lag by one cycle — the CSR would write
+    // stale (reset) values on exception entry, failing to capture
+    // the correct fault PC / instruction length / cause.  Keeping
+    // them combinational keeps data and write-gate aligned.
+    assign exception_pc_o    = selected_exc_pc;
+    assign exception_tval_o  = selected_exc_tval;
+    assign exception_ilen_o  = selected_exc_ilen;
+    assign exception_cause_o = selected_exc_cause;
     assign exception_taken_o = take_exception;
     assign exception_active_o = exception_active_q;
     assign flush_pipeline_o = take_exception || eret_exec_i;

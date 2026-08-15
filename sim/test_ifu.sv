@@ -56,7 +56,18 @@ module tb_ifu;
 
     // Combinational memory response: responds immediately when fetch_req is
     // asserted.  The IFU samples mem_ready_i on the next posedge.
-    always_comb begin
+    //
+    // NOTE: Using explicit sensitivity (fetch_req, mem_idx) instead of
+    // `always_comb` / `always @*` is intentional. When an always_comb block
+    // reads unpacked-array elements (mem_data[mem_idx], mem_mapped[mem_idx])
+    // with a variable index, iverilog must add *every* element of both
+    // arrays to the implicit sensitivity list — for MEM_DEPTH=65536 that is
+    // ~131k signals, which triggers O(n²) elaboration behavior and hangs
+    // compilation. In this testbench, memory writes happen only inside the
+    // sequential initial block (they are never concurrent with reads), so
+    // triggering on fetch_req + mem_idx alone is functionally equivalent
+    // and compiles in milliseconds.
+    always @(fetch_req or mem_idx) begin
         if (fetch_req && (mem_idx < MEM_DEPTH)) begin
             mem_ready = 1'b1;
             if (mem_mapped[mem_idx]) begin
@@ -135,12 +146,21 @@ module tb_ifu;
     endtask
 
     // Helper: initiate fetch with stall=0, then assert stall=1 to hold DONE,
-    //         wait the required number of memory-chunk cycles, then sample.
+    //         wait the required number of memory-chunk cycles + 1 for DONE
+    //         output-latching, then sample.
     //
     //   num_chunks = 1 → 2-byte  instruction
     //   num_chunks = 2 → 4-byte  instruction
     //   num_chunks = 3 → 6-byte  instruction
     //   num_chunks = 4 → 8-byte  instruction
+    //
+    // Pipeline timing inside the IFU (always_ff registered outputs):
+    //   Cycle 0 (first @): IDLE → FETCH_FIRST  (fetch issued)
+    //   Cycle 1:            FETCH_FIRST processes chunk 0 → (chunks>1
+    //                       goes FETCH_REMAINING, chunks==1 goes DONE)
+    //   Cycle N:            Last chunk processed → state <= DONE (NBA)
+    //   Cycle N+1:          DONE case runs → instr_o / instr_valid_o /
+    //                       next_pc_o are latched (this is the "+1" cycle)
     //
     // After returning, the IFU is in DONE with stall=1 asserted and
     // outputs are valid.
@@ -157,14 +177,19 @@ module tb_ifu;
         // Assert stall — when IFU reaches DONE it will be held there
         stall <= 1'b1;
 
-        // Wait for all chunks to be fetched.
-        // After the first @(posedge clk) above the IFU is in FETCH_FIRST.
-        // It takes (num_chunks) total cycles to reach DONE:
-        //   num_chunks=1: FETCH_FIRST (processes data) → DONE  (1 more clk)
-        //   num_chunks=2: FETCH_FIRST → FETCH_REMAINING → DONE (2 more clks)
-        //   num_chunks=3: FETCH_FIRST → F_R → F_R → DONE     (3 more clks)
-        //   num_chunks=4: FETCH_FIRST → F_R → F_R → F_R → DONE (4 more clks)
-        repeat (num_chunks) @(posedge clk);
+        // Wait (num_chunks) cycles for all memory chunks to be processed
+        // (state transition into DONE), then +1 extra cycle so the DONE
+        // case of the always_ff actually latches instr_o / instr_valid_o
+        // / next_pc_o onto the outputs (they’re registered, not comb).
+        repeat (num_chunks + 1) @(posedge clk);
+
+        // The last @(posedge clk) above unblocked the testbench at the
+        // beginning of the NBA region. DUT always_ff updates (instr_o <=
+        // instr_buffer, etc.) have been *scheduled* but not yet applied.
+        // A tiny #1 lets Verilog drain the NBA region so we sample the
+        // freshly-latched registered outputs instead of the previous
+        // test's values.
+        #1;
 
         // Now the IFU is in DONE (held by stall=1).  Outputs are valid.
     endtask
@@ -184,16 +209,27 @@ module tb_ifu;
     endtask
 
     // Helper: wait for exception or timeout
+    // NOTE: exception_o is a REGISTERED pulse (set via `<=` in the IFU's
+    // always_ff, held for exactly 1 cycle). We must sample it AFTER the
+    // NBA (non-blocking assignment) update propagates — adding `#1` after
+    // each @(posedge clk) ensures we do not miss the single-cycle pulse
+    // by checking the "before-NBA" stale value in the while-condition.
+    // NOTE: `break` is not supported by iverilog, so we exit via a done
+    // flag combined with the while-condition.
     task automatic wait_exception(
         input int timeout_cycles = 100
     );
-        int cyc;
-        cyc = 0;
-        while (!exception && cyc < timeout_cycles) begin
+        int   cyc;
+        logic done;
+        cyc  = 0;
+        done = 1'b0;
+        while (cyc < timeout_cycles && !done) begin
             @(posedge clk);
             cyc = cyc + 1;
+            #1;                    // let NBA (exception_o <= …) settle
+            if (exception) done = 1'b1;  // seen the registered pulse
         end
-        if (cyc >= timeout_cycles) begin
+        if (cyc >= timeout_cycles && !done) begin
             $display("[%0d] TIMEOUT: wait_exception exceeded %0d cycles",
                      test_num, timeout_cycles);
             fail_cnt = fail_cnt + 1;
@@ -280,6 +316,7 @@ module tb_ifu;
         $display("============================================================");
         $display(" MISC-2000 IFU Testbench");
         $display("============================================================");
+        $fflush();  // force output so we can diagnose hangs
 
         // Initialize all inputs.  Start with stall=1 to prevent the IFU
         // from issuing spurious fetches after reset while tests are being
@@ -290,26 +327,36 @@ module tb_ifu;
         branch_taken  = 1'b0;
         branch_target = '0;
 
-        // Clear memory model
+        // Clear memory model (MEM_DEPTH iterations — flush progress before)
+        $display("[t=%0d] start mem_clear", $time);
+        $fflush();
         mem_clear();
+        $display("[t=%0d] mem_clear done", $time);
+        $fflush();
 
         // Apply reset
         $display("\n--- Applying reset ---");
+        $fflush();
         apply_reset();
+        $display("[t=%0d] reset applied — IFU in IDLE", $time);
+        $fflush();
         // After reset, IFU is in IDLE with stall=1 — no spurious fetches.
 
         // TEST 1: 2-byte instruction fetch
         $display("\n--- Test 1: 2-byte instruction fetch ---");
 
         mem_clear();
-        // Store instruction at 0x1000: bit[7:6]=00 → 2B
-        mem_write(64'h1000, 16'h0042);
+        // Store instruction at 0x1000: first byte (addr 0x1000) must have
+        // bit[7:6]=00 → byte0=0x02. Little-endian word layout places the
+        // low address in the LSB: {byte1, byte0} = {0x42, 0x02} = 16'h4202.
+        mem_write(64'h1000, 16'h4202);
 
         // Hold IFU in DONE after fetching
         fetch_and_hold(64'h1000, 1);
 
         check3("Test 1: instr_len_o = 0 (2B)", instr_len, LEN_2B);
-        check64("Test 1: instr_o = 0x0042", instr, 64'h0000000000000042);
+        // buffer[15:0] = 0x4202 → instruction bytes: [0x02, 0x42]
+        check64("Test 1: instr_o = 0x4202", instr, 64'h0000000000004202);
         check_bit("Test 1: instr_valid_o = 1", instr_valid, 1'b1);
         check_bit("Test 1: exception_o = 0", exception, 1'b0);
         check64("Test 1: next_pc_o = 0x1002", next_pc, 64'h1002);
@@ -320,7 +367,8 @@ module tb_ifu;
         $display("\n--- Test 2: 4-byte instruction fetch ---");
 
         mem_clear();
-        // First 2 bytes at 0x1000: bit[7:6]=01 → 4B
+        // First 2 bytes at 0x1000: first byte bit[7:6]=01 → byte0=0x42
+        // → {byte1, byte0} = {0x01, 0x42} = 16'h0142 ✓
         mem_write(64'h1000, 16'h0142);
         // Second 2 bytes at 0x1002
         mem_write(64'h1002, 16'hABCD);
@@ -343,19 +391,20 @@ module tb_ifu;
         $display("\n--- Test 3: 6-byte instruction fetch ---");
 
         mem_clear();
-        // First 2 bytes at 0x1000: bit[7:6]=10 → 6B
-        mem_write(64'h1000, 16'h8000);
+        // First 2 bytes at 0x1000: first byte bit[7:6]=10 → byte0=0x80
+        // → {byte1, byte0} = {0x00, 0x80} = 16'h0080
+        mem_write(64'h1000, 16'h0080);
         mem_write(64'h1002, 16'h1111);
         mem_write(64'h1004, 16'h2222);
 
         fetch_and_hold(64'h1000, 3);
 
         check3("Test 3: instr_len_o = 2 (6B)", instr_len, LEN_6B);
-        // buffer[15:0]  = 0x8000
-        // buffer[31:16] = 0x1111
-        // buffer[47:32] = 0x2222
+        // buffer[15:0]  = 0x0080  (chunk 0: bytes [0x80, 0x00])
+        // buffer[31:16] = 0x1111  (chunk 1: bytes [0x11, 0x11])
+        // buffer[47:32] = 0x2222  (chunk 2: bytes [0x22, 0x22])
         check64("Test 3: instr_o 6 bytes collected", instr,
-                64'h0000_2222_1111_8000);
+                64'h0000_2222_1111_0080);
         check_bit("Test 3: instr_valid_o = 1", instr_valid, 1'b1);
         check_bit("Test 3: exception_o = 0", exception, 1'b0);
         check64("Test 3: next_pc_o = 0x1006", next_pc, 64'h1006);
@@ -366,8 +415,9 @@ module tb_ifu;
         $display("\n--- Test 4: 8-byte instruction fetch ---");
 
         mem_clear();
-        // First 2 bytes at 0x1000: bit[7:6]=11 → 8B
-        mem_write(64'h1000, 16'hC000);
+        // First 2 bytes at 0x1000: first byte bit[7:6]=11 → byte0=0xC0
+        // → {byte1, byte0} = {0x00, 0xC0} = 16'h00C0
+        mem_write(64'h1000, 16'h00C0);
         mem_write(64'h1002, 16'hAAAA);
         mem_write(64'h1004, 16'hBBBB);
         mem_write(64'h1006, 16'hCCCC);
@@ -375,12 +425,12 @@ module tb_ifu;
         fetch_and_hold(64'h1000, 4);
 
         check3("Test 4: instr_len_o = 3 (8B)", instr_len, LEN_8B);
-        // buffer[15:0]  = 0xC000
-        // buffer[31:16] = 0xAAAA
-        // buffer[47:32] = 0xBBBB
-        // buffer[63:48] = 0xCCCC
+        // buffer[15:0]  = 0x00C0  (chunk 0: bytes [0xC0, 0x00])
+        // buffer[31:16] = 0xAAAA  (chunk 1: bytes [0xAA, 0xAA])
+        // buffer[47:32] = 0xBBBB  (chunk 2: bytes [0xBB, 0xBB])
+        // buffer[63:48] = 0xCCCC  (chunk 3: bytes [0xCC, 0xCC])
         check64("Test 4: instr_o 8 bytes collected", instr,
-                64'hCCCC_BBBB_AAAA_C000);
+                64'hCCCC_BBBB_AAAA_00C0);
         check_bit("Test 4: instr_valid_o = 1", instr_valid, 1'b1);
         check_bit("Test 4: exception_o = 0", exception, 1'b0);
         check64("Test 4: next_pc_o = 0x1008", next_pc, 64'h1008);
@@ -449,7 +499,9 @@ module tb_ifu;
         $display("\n--- Test 7: Pipeline flush ---");
 
         mem_clear();
-        mem_write(64'h1000, 16'h8042);  // bit[7:6]=10 → 6B
+        // First word: byte0 bit[7:6]=10 → 6B → byte0=0x80, byte1=0x42
+        // → {byte1, byte0} = 16'h4280
+        mem_write(64'h1000, 16'h4280);  // bit[7:6]=10 → 6B
         mem_write(64'h1002, 16'hAAAA);
         mem_write(64'h1004, 16'hBBBB);
 
@@ -466,6 +518,7 @@ module tb_ifu;
         flush <= 1'b0;
 
         // Check that IFU is back in IDLE (outputs cleared)
+        #1;               // registered outputs settle after NBA
         check_bit("Test 7: fetch_req_o = 0 after flush", fetch_req, 1'b0);
         check_bit("Test 7: instr_valid_o = 0 after flush", instr_valid, 1'b0);
         check_bit("Test 7: exception_o = 0 after flush", exception, 1'b0);
@@ -474,26 +527,35 @@ module tb_ifu;
         $display("\n--- Test 8: Pipeline stall ---");
 
         mem_clear();
-        mem_write(64'h1000, 16'h0042);  // 2B instruction
+        // 2B instruction: byte0 bit[7:6]=00 → byte0=0x02, byte1=0x42
+        // → {byte1, byte0} = 16'h4202
+        mem_write(64'h1000, 16'h4202);  // 2B instruction
 
         // Assert stall — IFU should not issue a fetch
         stall <= 1'b1;
         pc = 64'h1000;
         @(posedge clk);   // IFU stays in IDLE (stalled)
+        #1;
         check_bit("Test 8: fetch_req_o = 0 during stall", fetch_req, 1'b0);
 
         // Deassert stall — IFU should resume and issue fetch
         stall <= 1'b0;
-        @(posedge clk);   // IDLE → FETCH_FIRST
+        @(posedge clk);   // IDLE → FETCH_FIRST (fetch_req latched this cycle)
+        #1;               // let NBA (fetch_req_o <= 1) propagate
         // fetch_req_o should be asserted now
         check_bit("Test 8: fetch_req_o = 1 after stall deassert", fetch_req, 1'b1);
 
-        // Now stall again to catch DONE
+        // Now stall again to hold DONE once reached
         stall <= 1'b1;
-        @(posedge clk);   // FETCH_FIRST → DONE (2B, held)
+        // Cycle 1: FETCH_FIRST processes the 2-byte chunk → state <= DONE
+        @(posedge clk);
+        // Cycle 2: DONE case runs → instr_o / instr_valid_o are latched
+        @(posedge clk);
+        #1;
 
         check_bit("Test 8: instr_valid_o = 1 after stall resume", instr_valid, 1'b1);
-        check64("Test 8: instr_o = 0x0042", instr, 64'h0000000000000042);
+        // buffer[15:0] = 0x4202 → bytes [0x02, 0x42]
+        check64("Test 8: instr_o = 0x4202", instr, 64'h0000000000004202);
 
         release_stall();
 
@@ -530,19 +592,25 @@ module tb_ifu;
         $display("\n--- Test 10: Branch flush and redirection ---");
 
         mem_clear();
-        mem_write(64'h1000, 16'h0042);  // 2B at 0x1000
-        mem_write(64'h3000, 16'h0043);  // 2B at 0x3000
+        // 2B instructions: byte0 bit[7:6]=00.
+        //   @0x1000: byte0=0x02, byte1=0x42 → 16'h4202 (bytes [0x02, 0x42])
+        //   @0x3000: byte0=0x03, byte1=0x43 → 16'h4303 (bytes [0x03, 0x43])
+        mem_write(64'h1000, 16'h4202);  // 2B at 0x1000
+        mem_write(64'h3000, 16'h4303);  // 2B at 0x3000
 
         stall <= 1'b0;
         pc = 64'h1000;
         @(posedge clk);   // IDLE → FETCH_FIRST (fetch issued to 0x1000)
 
-        // Assert branch_taken during fetch with target 0x3000
-        branch_taken  = 1'b1;
-        branch_target = 64'h3000;
-        @(posedge clk);   // branch flush: IFU → IDLE, fetch_addr set to 0x3000
-        branch_taken  = 1'b0;
-        branch_target = '0;
+        // Now assert branch_taken (non-blocking to match other DUT inputs)
+        // with the target 0x3000.  Keep asserted for exactly one cycle so
+        // the IFU’s always_ff samples it on the next posedge.
+        branch_taken  <= 1'b1;
+        branch_target <= 64'h3000;
+        @(posedge clk);   // Cycle B: flush_branch case fires on this edge
+        branch_taken  <= 1'b0;
+        branch_target <= '0;
+        #1;               // let Cycle B’s NBA (fetch_addr_reg <= 0x3000 etc.) propagate
 
         // After branch, IFU should be in IDLE with no valid instruction
         check_bit("Test 10a: instr_valid_o = 0 after branch", instr_valid, 1'b0);
@@ -551,16 +619,26 @@ module tb_ifu;
         // fetch_addr_reg should now point to branch target
         check64("Test 10c: fetch_addr_o = 0x3000 (branch target)", fetch_addr, 64'h3000);
 
-        // Now let the IFU fetch from the branch target (stall=1 to hold DONE)
-        stall <= 1'b1;
-        // One cycle: IDLE → FETCH_FIRST
+        // Now let the IFU fetch from the branch target.  In a real pipeline
+        // the core sets pc_i to the branch target at the same time it
+        // asserts branch_taken_i so that once the IFU returns to IDLE and
+        // issues the next fetch (which goes through the IDLE pc_i path),
+        // pc_i already points at the branch target.  Mirror that here.
+        pc    = 64'h3000;
+        stall <= 1'b0;
+        // Cycle 1: IDLE → FETCH_FIRST (issues fetch for 0x3000 via pc_i)
         @(posedge clk);
-        // One more cycle: FETCH_FIRST → DONE (2-byte instruction)
+        stall <= 1'b1;                       // hold DONE once reached
+        // Cycle 2: FETCH_FIRST processes chunk 0 → 2B, state <= DONE
         @(posedge clk);
+        // Cycle 3: DONE case runs → instr_o / instr_valid_o are latched
+        @(posedge clk);
+        #1;
 
         // Verify we fetched from 0x3000
         check_bit("Test 10d: instr_valid_o = 1 after branch fetch", instr_valid, 1'b1);
-        check64("Test 10e: instr_o = 0x0043 (from 0x3000)", instr, 64'h0000000000000043);
+        // buffer[15:0] = 0x4303 → bytes [0x03, 0x43]
+        check64("Test 10e: instr_o = 0x4303 (from 0x3000)", instr, 64'h0000000000004303);
         check64("Test 10f: next_pc_o = 0x3002", next_pc, 64'h3002);
 
         release_stall();

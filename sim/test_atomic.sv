@@ -49,6 +49,7 @@ module tb_atomic;
     logic                       ll_exec;
     logic [ADDR_WIDTH-1:0]      ll_addr;
     logic                       sc_exec;
+    logic [ADDR_WIDTH-1:0]      sc_addr;    // SC address from atomic (for CSR address match)
     logic                       sc_success;
     logic                       monitor_clear;
     logic                       exception;
@@ -66,7 +67,22 @@ module tb_atomic;
     logic [DATA_WIDTH-1:0]      csr_rdata;
 
     // Memory Model
-    logic [DATA_WIDTH-1:0]      mem_array [logic [ADDR_WIDTH-1:0]];
+    // NOTE: This iverilog build does not support associative arrays with
+    // a type-specified index (it treats `[...]` as a fixed-size unpacked
+    // dimension declaration and rejects type-name expressions), and also
+    // rejects the wildcard `[*]` syntax with a parse error.  Workaround:
+    // use a plain unpacked array with a compile-time-constant depth.  All
+    // addresses used by this testbench are well under 64 KB (0x1000 …
+    // 0x7000), so 2^16 = 65536 entries of 64-bit data is plenty and
+    // uses only ~512 KB of RAM (including the parallel valid-bit mask).
+    //
+    // Indexing uses addr[15:0] (the lower 16 bits) everywhere.
+    // mem_valid[] is a parallel valid-bit array used in place of the
+    // non-portable .exists() associative-array method (iverilog does
+    // not implement .exists()).
+    localparam MEM_DEPTH = 1 << 16;          // 65536 entries
+    logic [DATA_WIDTH-1:0]      mem_array [MEM_DEPTH];
+    logic                       mem_valid   [MEM_DEPTH];
     logic                       mem_responding;  // flag: memory is handling a request
     logic [ADDR_WIDTH-1:0]      mem_req_addr;
     logic                       mem_req_is_write;
@@ -87,6 +103,12 @@ module tb_atomic;
     logic                       ll_exec_captured;
     logic                       sc_exec_captured;
     logic                       fence_exec_captured;
+    // ll_addr_captured — locks in the ll_addr_o value at the cycle
+    // ll_exec_o pulses.  ll_addr_o itself is a combinational output
+    // of u_atomic and returns to 0 once the state machine leaves the
+    // LL.D READ phase, so the value would be lost by the time the
+    // testbench finishes wait_result_valid() and tries to check it.
+    logic [ADDR_WIDTH-1:0]      ll_addr_captured;
 
     // Clock Generation — 10 ns period, 5 ns high / 5 ns low
     initial clk = 1'b0;
@@ -119,6 +141,7 @@ module tb_atomic;
         .ll_exec_o       (ll_exec),
         .ll_addr_o       (ll_addr),
         .sc_exec_o       (sc_exec),
+        .sc_addr_o       (sc_addr),
         .sc_success_i    (sc_success),
         .monitor_clear_i (monitor_clear),
         .exception_o     (exception),
@@ -151,8 +174,9 @@ module tb_atomic;
         .ll_exec_i        (ll_exec),
         .ll_addr_i        (ll_addr),
         .sc_exec_i        (sc_exec),
+        .sc_addr_i        (sc_addr),
         .sc_success_o     (sc_success),
-        .monitor_clear_i  (1'b0)
+        .monitor_clear_i  (monitor_clear)
     );
 
     // Memory Model Logic
@@ -185,11 +209,14 @@ module tb_atomic;
                     mem_page_fault <= 1'b1;
                     mem_fault      <= 1'b0;
                 end else if (mem_req_is_write) begin
-                    mem_array[mem_req_addr] <= mem_req_wdata;
+                    mem_array[mem_req_addr[15:0]] <= mem_req_wdata;
+                    mem_valid[mem_req_addr[15:0]] <= 1'b1;
                 end else begin
-                    // Read: provide data from memory array
-                    if (mem_array.exists(mem_req_addr))
-                        mem_rdata <= mem_array[mem_req_addr];
+                    // Read: provide data from memory array (use parallel
+                    // mem_valid[] because iverilog lacks associative-array
+                    // .exists() method support)
+                    if (mem_valid[mem_req_addr[15:0]])
+                        mem_rdata <= mem_array[mem_req_addr[15:0]];
                     else
                         mem_rdata <= '0;
                 end
@@ -206,13 +233,19 @@ module tb_atomic;
     // Pulse Capture — latch rising edges of pulsed outputs
     // ll_exec_o, sc_exec_o, and fence_exec_o are pulsed for one cycle.
     // We capture them so they can be checked later in the test sequence.
+    // ll_addr_o is combinational and vanishes after the pulse, so we
+    // also latch its value (ll_addr_captured) on the same cycle.
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             ll_exec_captured    <= 1'b0;
             sc_exec_captured    <= 1'b0;
             fence_exec_captured <= 1'b0;
+            ll_addr_captured    <= {ADDR_WIDTH{1'b0}};
         end else begin
-            if (ll_exec)    ll_exec_captured    <= 1'b1;
+            if (ll_exec) begin
+                ll_exec_captured <= 1'b1;
+                ll_addr_captured <= ll_addr;
+            end
             if (sc_exec)    sc_exec_captured    <= 1'b1;
             if (fence_exec) fence_exec_captured <= 1'b1;
         end
@@ -269,6 +302,7 @@ module tb_atomic;
         ll_exec_captured    <= 1'b0;
         sc_exec_captured    <= 1'b0;
         fence_exec_captured <= 1'b0;
+        ll_addr_captured    <= {ADDR_WIDTH{1'b0}};
     endtask
 
     // Issue an instruction to the atomic module
@@ -290,27 +324,40 @@ module tb_atomic;
     endtask
 
     // Wait for memory operation to complete (mem_ready asserted)
+    // NOTE: `return` inside tasks is not supported by iverilog, so we exit
+    // the loop via a done flag.
     task automatic wait_mem_ready();
-        // Wait until memory responds, or timeout
-        repeat (100) begin
+        integer cyc;
+        logic   done;
+        cyc  = 0;
+        done = 1'b0;
+        while (cyc < 100 && !done) begin
             @(posedge clk);
             if (mem_ready) begin
                 @(posedge clk);  // consume the ready cycle
-                return;
+                done = 1'b1;
             end
+            cyc = cyc + 1;
         end
-        $display("[%0d] ERROR: Memory timeout — mem_ready never asserted", test_num);
+        if (!done)
+            $display("[%0d] ERROR: Memory timeout — mem_ready never asserted", test_num);
     endtask
 
     // Wait for result_valid
     task automatic wait_result_valid();
-        repeat (100) begin
+        integer cyc;
+        logic   done;
+        cyc  = 0;
+        done = 1'b0;
+        while (cyc < 100 && !done) begin
             @(posedge clk);
             if (result_valid) begin
-                return;
+                done = 1'b1;
             end
+            cyc = cyc + 1;
         end
-        $display("[%0d] ERROR: Result timeout — result_valid never asserted", test_num);
+        if (!done)
+            $display("[%0d] ERROR: Result timeout — result_valid never asserted", test_num);
     endtask
 
     // Read a CSR register
@@ -331,15 +378,17 @@ module tb_atomic;
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [DATA_WIDTH-1:0] data
     );
-        mem_array[addr] = data;
+        mem_array[addr[15:0]] = data;
+        mem_valid[addr[15:0]] = 1'b1;
     endtask
 
-    // Read from memory array
+    // Read from memory array (iverilog lacks .exists() method on associative
+    // arrays, so we check the parallel mem_valid[] tracking instead)
     function automatic logic [DATA_WIDTH-1:0] mem_load(
         input logic [ADDR_WIDTH-1:0] addr
     );
-        if (mem_array.exists(addr))
-            return mem_array[addr];
+        if (mem_valid[addr[15:0]])
+            return mem_array[addr[15:0]];
         else
             return '0;
     endfunction
@@ -426,7 +475,7 @@ module tb_atomic;
         check_val("LL.D result = 0xDEADBEEF_CAFEBABE", result, 64'hDEADBEEF_CAFEBABE);
         check_bool("LL.D result_valid = 1", result_valid, 1'b1);
         check_bool("LL.D ll_exec_o pulsed", ll_exec_captured, 1'b1);
-        check_val("LL.D ll_addr_o = 0x1000", ll_addr, 64'h1000);
+        check_val("LL.D ll_addr_o = 0x1000", ll_addr_captured, 64'h1000);
 
         // Test 2: LL.D sets monitor (CSR readback)
         $display("\n--- Test 2: LL.D sets monitor (CSR readback) ---");

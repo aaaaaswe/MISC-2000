@@ -35,6 +35,7 @@ module misc_atomic #(
     output logic                         ll_exec_o,
     output logic [ADDR_WIDTH-1:0]        ll_addr_o,
     output logic                         sc_exec_o,
+    output logic [ADDR_WIDTH-1:0]        sc_addr_o,
     input  logic                         sc_success_i,
     input  logic                         monitor_clear_i,
 
@@ -190,6 +191,7 @@ module misc_atomic #(
         ll_exec_o         = 1'b0;
         ll_addr_o         = {ADDR_WIDTH{1'b0}};
         sc_exec_o         = 1'b0;
+        sc_addr_o         = addr_q;   // latched SC target (stable while SC runs)
         exception_o       = exception_q;
         exception_addr_o  = exception_addr_q;
         result_o          = result_q;

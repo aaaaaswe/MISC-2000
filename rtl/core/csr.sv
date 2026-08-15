@@ -33,6 +33,7 @@ module misc_csr #(
     input  logic                         ll_exec_i,
     input  logic [ADDR_WIDTH-1:0]        ll_addr_i,
     input  logic                         sc_exec_i,
+    input  logic [ADDR_WIDTH-1:0]        sc_addr_i,
     output logic                         sc_success_o,
     input  logic                         monitor_clear_i
 );
@@ -77,7 +78,16 @@ module misc_csr #(
     endfunction
 
     assign eret_target_o = mepc + { {(ADDR_WIDTH-16){1'b0}}, millen };
-    assign sc_success_o = sc_exec_i & monitor_valid;
+
+    // SC succeeds iff the monitor is currently valid AND the SC's
+    // target address (64-byte aligned) matches the address the LL.D
+    // reserved.  A bare monitor_valid==1 check is insufficient: it
+    // would let an SC against a *different* address succeed once any
+    // LL.D has set the monitor at all.
+    logic [ADDR_WIDTH-1:0] sc_addr_aligned;
+    assign sc_addr_aligned  = {sc_addr_i[ADDR_WIDTH-1:6], 6'b0};
+    assign sc_success_o     = sc_exec_i & monitor_valid
+                              & (monitor_addr == sc_addr_aligned);
 
     // CSR read multiplexer
     always_comb begin

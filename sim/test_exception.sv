@@ -178,6 +178,11 @@ module tb_exception;
         csr_addr_i  = addr;
         csr_wdata_i = data;
         @(posedge clk);
+        // Important: wait one #1 after the posedge so the DUT always_ff
+        // samples wen_i=1 on this edge and the registered CSR write NBA
+        // propagates *before* we drive wen_i back to 0 (which would race
+        // with the DUT input sample if executed too early).
+        #1;
         csr_wen_i   = 1'b0;
         csr_addr_i  = 12'h000;
         csr_wdata_i = '0;
@@ -200,6 +205,9 @@ module tb_exception;
     task automatic do_eret();
         eret_exec_i = 1'b1;
         @(posedge clk);
+        // Wait for NBA propagation before clearing eret_exec_i (otherwise
+        // DUT always_ff may sample 0 on this posedge instead of 1)
+        #1;
         eret_exec_i = 1'b0;
     endtask
 
@@ -247,6 +255,12 @@ module tb_exception;
         test_num = test_num + 1;
 
         @(posedge clk);
+        // Delay so DUT always_ff samples the still-asserted exception
+        // inputs on this edge, and the registered CSR write / state
+        // transition NBA propagates, before we reset inputs to 0
+        // (which would otherwise race with the DUT sample and cause the
+        // CSR write to be missed).
+        #1;
         // Clear exception inputs after the edge
         init_inputs();
     endtask
@@ -312,7 +326,18 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
+        // Delay for DUT-always_ff sample + NBA propagation before clearing
+        // the exception inputs (prevents sampling-vs-clear race).
+        #1;
         init_inputs();
+
+        // The exception module raises a registered CSR-write request which
+        // is consumed by the separate CSR file one cycle later (it is a
+        // cross-module registered interface).  Wait one additional cycle
+        // so the CSR file has sampled the request, performed the write,
+        // and propagated the new register values to the combinational
+        // read-back port before we attempt to read CSR_EPC / CSR_ILLEN.
+        wait_cycles(1);
 
         // Now read CSR_EPC via CSR read interface (combinational)
         csr_ren_i  = 1'b1;
@@ -360,6 +385,10 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
+        // Allow DUT always_ff NBA to sample eret_exec_i=1 and process
+        // ERET state transition / exception_active clear before we
+        // deassert (avoids posedge-sample race).
+        #1;
         eret_exec_i = 1'b0;
         wait_cycles(1);
 
@@ -376,6 +405,10 @@ module tb_exception;
               $sformatf("eret_target_o = 0x%016h", csr_eret_target));
 
         @(posedge clk);
+        // Allow DUT always_ff NBA to sample eret_exec_i=1 and process
+        // ERET state transition / exception_active clear before we
+        // deassert (avoids posedge-sample race).
+        #1;
         eret_exec_i = 1'b0;
         wait_cycles(1);
 
@@ -392,6 +425,10 @@ module tb_exception;
               $sformatf("eret_target_o = 0x%016h", csr_eret_target));
 
         @(posedge clk);
+        // Allow DUT always_ff NBA to sample eret_exec_i=1 and process
+        // ERET state transition / exception_active clear before we
+        // deassert (avoids posedge-sample race).
+        #1;
         eret_exec_i = 1'b0;
         wait_cycles(1);
 
@@ -414,6 +451,9 @@ module tb_exception;
         check("Test 5a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
+        // Delay for DUT-always_ff sample + NBA propagation before clearing
+        // the exception inputs (prevents sampling-vs-clear race).
+        #1;
         init_inputs();
 
         // Check latched cause (IFU page fault = 0x0C wins over data page fault 0x0D)
@@ -442,6 +482,9 @@ module tb_exception;
         check("Test 6a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
+        // Delay for DUT-always_ff sample + NBA propagation before clearing
+        // the exception inputs (prevents sampling-vs-clear race).
+        #1;
         init_inputs();
 
         check("Test 6b: exception_cause_o = 0x0C (page fault beats illegal instr)",
@@ -464,9 +507,10 @@ module tb_exception;
         check("Test 7a: exception_taken_o fires",
               exception_taken_o === 1'b1, "");
         @(posedge clk);
+        #1;                    // allow NBA on exception_active_q to propagate
         init_inputs();
 
-        // Verify exception_active_o is now set
+        // Verify exception_active_o is now set (registered, sampled after #1)
         check("Test 7b: exception_active_o is set",
               exception_active_o === 1'b1,
               $sformatf("exception_active_o = %b", exception_active_o));
@@ -483,20 +527,39 @@ module tb_exception;
               exception_taken_o === 1'b0,
               $sformatf("exception_taken_o = %b (expected 0)", exception_taken_o));
         @(posedge clk);
+        // Delay for DUT-always_ff sample + NBA propagation before clearing
+        // the exception inputs (prevents sampling-vs-clear race).
+        #1;
         init_inputs();
 
         // Execute ERET to clear exception state
         do_eret();
         wait_cycles(1);
-
+        #1;
         check("Test 7d: exception_active_o cleared after ERET",
               exception_active_o === 1'b0,
               $sformatf("exception_active_o = %b (expected 0)", exception_active_o));
 
-        wait_cycles(1);
+        // Extra drain cycles so any leftover comb glitches from Test 7 settle
+        wait_cycles(2);
 
         // TEST 8: CSR read/write
         $display("\n========== Test 8: CSR read/write ==========");
+
+        // Write 6 to CSR_ILLEN FIRST (before EPC) to avoid any chance
+        // of a spurious exception-entry overwriting it on the same cycle.
+        csr_write(CSR_ILLEN, 64'd6);
+        wait_cycles(1);
+
+        // Read back and verify immediately
+        csr_ren_i  = 1'b1;
+        csr_addr_i = CSR_ILLEN;
+        #1;
+        check("Test 8b: CSR_ILLEN readback = 6",
+              csr_rdata_o === 64'd6,
+              $sformatf("CSR_ILLEN = 0x%016h", csr_rdata_o));
+        csr_ren_i  = 1'b0;
+        csr_addr_i = 12'h000;
 
         // Write 0xDEADBEEF to CSR_EPC
         csr_write(CSR_EPC, 64'hDEADBEEF);
@@ -508,19 +571,6 @@ module tb_exception;
         check("Test 8a: CSR_EPC readback = 0xDEADBEEF",
               csr_rdata_o === 64'hDEADBEEF,
               $sformatf("CSR_EPC = 0x%016h", csr_rdata_o));
-        csr_ren_i  = 1'b0;
-        csr_addr_i = 12'h000;
-
-        // Write 6 to CSR_ILLEN
-        csr_write(CSR_ILLEN, 64'd6);
-
-        // Read back and verify
-        csr_ren_i  = 1'b1;
-        csr_addr_i = CSR_ILLEN;
-        #1;
-        check("Test 8b: CSR_ILLEN readback = 6",
-              csr_rdata_o === 64'd6,
-              $sformatf("CSR_ILLEN = 0x%016h", csr_rdata_o));
         csr_ren_i  = 1'b0;
         csr_addr_i = 12'h000;
 
@@ -545,6 +595,9 @@ module tb_exception;
               $sformatf("exception_target_pc_o = 0x%016h", exception_target_pc_o));
 
         @(posedge clk);
+        // Delay for DUT-always_ff sample + NBA propagation before clearing
+        // the exception inputs (prevents sampling-vs-clear race).
+        #1;
         init_inputs();
 
         do_eret();
@@ -561,6 +614,7 @@ module tb_exception;
 
         #1;
         @(posedge clk);
+        #1;                    // allow NBA on exception_active_q to propagate
         init_inputs();
 
         // Verify exception_active_o is set -> memory operations should be blocked

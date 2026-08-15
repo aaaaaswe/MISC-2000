@@ -148,9 +148,11 @@ module tb_decoder;
         test_opcode("MEMBAR   (0x15D) special",
             11'h15D, 4'd0, 3'd0, 3'd2, 8'd0, 1'b0, 1'b1, 1'b1);
 
-        // 0x15E: off=0x5E=94, dtype=(94%20)/5=2(D)
+        // 0x15E: FENCE — atomic/sync opcode, classified as CLASS_SYSTEM (6)
+        // with ADDR_REG (1), DTYPE_D (2). Higher-priority match than plain
+        // DATA_XFER range — see decoder.sv is_atomic_op priority branch.
         test_opcode("FENCE    (0x15E) special",
-            11'h15E, 4'd0, 3'd0, 3'd2, 8'd0, 1'b0, 1'b1, 1'b1);
+            11'h15E, 4'd6, 3'd1, 3'd2, 8'd0, 1'b0, 1'b1, 1'b1);
 
         // Boundary: last Data Transfer opcode
         // off=0xFF=255, addr=255%5=0(IMM), dtype=(255%20)/5=15/5=3(Q)
