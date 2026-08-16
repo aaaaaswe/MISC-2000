@@ -49,7 +49,13 @@ module misc_csr #(
 
     // Internal registers
     logic [ADDR_WIDTH-1:0] mepc;           // CSR_EPC
-    logic [15:0]           millen;         // CSR_ILLEN (2/4/6/8 bytes)
+    // CSR_ILLEN: stored as 16 bits even though current values are only 2/4/6/8.
+    // Trade-off: pad to a minimum 16-bit CSR data-field width so the register
+    // naturally aligns to 2-byte boundaries on any 16-bit-wide CSR bus, and to
+    // reserve headroom for future longer-instruction ISA variants (up to 64 KB
+    // instructions in an extreme VLIW mode).  Bits [15:3] read back as zero in
+    // the current implementation; software should not rely on them being RAZ.
+    logic [15:0]           millen;         // CSR_ILLEN (2/4/6/8 bytes, 16-bit wide)
     logic [3:0]            mecause;        // CSR_ECAUSE
     logic [ADDR_WIDTH-1:0] metval;         // CSR_ETVAL
     logic [DATA_WIDTH-1:0] mestatus;       // CSR_ESTATUS

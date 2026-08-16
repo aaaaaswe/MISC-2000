@@ -81,6 +81,10 @@ module misc_decoder (
     // as plain load/stores. Trade-off: keep existing 4-bit CLASS_* encoding
     // (no interface change) by reusing CLASS_SYSTEM rather than adding a
     // dedicated CLASS_ATOMIC; CLASS_SYSTEM already reserved for 0x7C0–0x7CF.
+    // NOTE: OP_LL_D..OP_CAS_DIR / OP_FENCE / OP_GETILEN are intentionally
+    // duplicated across ifu.sv, decoder.sv, atomic.sv, pipeline_ctrl.sv, and
+    // sim testbenches so each module compiles standalone without a shared
+    // `include file. Trade-off: duplication vs. simpler per-module build rules.
     localparam logic [10:0] OP_LL_D       = 11'h144;
     localparam logic [10:0] OP_SC_D       = 11'h145;
     localparam logic [10:0] OP_CAS_IMM    = 11'h146;

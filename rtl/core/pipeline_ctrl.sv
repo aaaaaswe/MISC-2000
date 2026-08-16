@@ -391,6 +391,14 @@ module misc_pipeline_ctrl #(
     // Register addresses (from decode stage)
     assign rs1_addr_o = de_rs1_addr;
     assign rs2_addr_o = de_rs2_addr;
+    // rd_addr_o forwarding: prefer the writeback-stage rd if writeback is
+    // currently valid and writing, otherwise fall back to execute/memory rd.
+    // This aligns the write-address port with the write-data timing on the
+    // regfile (reg_write_o == mw_reg_write && mw_valid) so that back-to-back
+    // dependent instructions see the correct destination register without a
+    // 1-cycle bubble on the write-enable vs. write-address alignment.
+    // Trade-off: small combinational mux (no extra pipeline register cost) vs.
+    // having downstream regfile register its own write address internally.
     assign rd_addr_o  = (mw_valid && mw_reg_write) ? mw_rd_addr : em_rd_addr;
 
     // ALU interface — driven by decode-stage values

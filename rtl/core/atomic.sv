@@ -54,9 +54,12 @@ module misc_atomic #(
 
     // Opcode definitions
     // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
-    // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC
-    // NOTE: Duplicated in ifu.sv + testbenches — kept in sync intentionally so
-    // each module + testbench compiles standalone without shared includes.
+    // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC.
+    // NOTE: These opcode constants are intentionally duplicated across
+    // ifu.sv, decoder.sv, atomic.sv, pipeline_ctrl.sv, and sim testbenches
+    // so each module compiles standalone without a shared `include file.
+    // Trade-off: accept duplication risk vs. simpler per-module build rules
+    // (the sim Makefile builds each RTL file + its testbench with no -I path).
     localparam logic [10:0] OP_LL_D      = 11'h144;
     localparam logic [10:0] OP_SC_D      = 11'h145;
     localparam logic [10:0] OP_CAS_IMM   = 11'h146;
@@ -92,11 +95,15 @@ module misc_atomic #(
 
     // Cross-page detection: atomics must not cross 4 KB boundary.
     // Spec: All atomic instructions (LL.D, SC.D, CAS.D) are 4-byte fixed length.
-    // Last byte is at inst_addr + 3: crossing if inst_addr[11:0] + 4 > 4096.
+    // Last byte is at inst_addr + 3: crossing if inst_addr[11:0] + 4 > PAGE_SIZE.
     // Using > (not >=): 0xFFC + 4 = 0x1000 is exactly on boundary, not crossing.
+    // NOTE: PAGE_SIZE / ATOMIC_INST_BYTES naming mirrors ifu.sv so the cross-
+    // page check in both modules reads identically (reduces drift risk in the
+    // intentionally-duplicated constant setup; see opcode NOTE above).
+    localparam logic [12:0] PAGE_SIZE         = 13'h1000;  // 4 KB page
     localparam logic [12:0] ATOMIC_INST_BYTES = 13'd4;
     logic cross_page;
-    assign cross_page = ({1'b0, inst_addr_i[11:0]} + ATOMIC_INST_BYTES) > 13'h1000;
+    assign cross_page = (inst_addr_i[11:0] + ATOMIC_INST_BYTES) > PAGE_SIZE;
 
     // Internal registers
     logic [DATA_WIDTH-1:0]   read_data_q;      // data read from memory (LL / CAS)

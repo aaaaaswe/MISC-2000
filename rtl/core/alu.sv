@@ -365,6 +365,13 @@ module misc_alu (
                 raw_result = bitrev_func(op_a_i);
             end
 
+            // SEXT/ZEXT: always extend 8→64 or 16→64 regardless of data_width_i.
+            // These are fixed-function sub-register extract-and-extend ops, not
+            // parameterized by the current data-width setting — the operand is
+            // always a byte or halfword sitting in the LSBs of op_a_i.
+            // Trade-off: bypass data_mask/sext_active for these four codes to
+            // avoid overwriting the upper bits that data_width_i would mask off
+            // (e.g. SEXT.W with data_width_i=BYTE should still fill bits 63:16).
             OP_SEXT_B: begin raw_result = {{56{op_a_i[7]}}, op_a_i[7:0]}; end
             OP_SEXT_W: begin raw_result = {{48{op_a_i[15]}}, op_a_i[15:0]}; end
             OP_ZEXT_B: begin raw_result = {56'd0, op_a_i[7:0]}; end

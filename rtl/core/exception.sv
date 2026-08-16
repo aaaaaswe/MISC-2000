@@ -126,6 +126,15 @@ module misc_exception #(
             selected_exc_cause  = EXC_CAUSE_ILLEGAL_INSTR;
         end
         // Priority 5: Decode illegal instruction
+        // NOTE: decode_exception_cause_i is intentionally UNUSED here. In the
+        // current design the decode stage only ever reports illegal-instruction
+        // class faults, so every decode_exception_i trap maps unconditionally to
+        // EXC_CAUSE_ILLEGAL_INSTR.  The 2-bit cause input is retained on the
+        // module interface for forward compatibility: future decode-stage
+        // sub-classifications (e.g. reserved-vs-unimplemented opcode, or
+        // privileged-instruction violations) can be wired in without changing
+        // the port list.  Trade-off: wider-than-needed port today vs. avoiding
+        // a future interface break.
         else if (decode_exception_i) begin
             exception_detected  = 1'b1;
             selected_exc_pc     = decode_exception_addr_i; // instruction address
