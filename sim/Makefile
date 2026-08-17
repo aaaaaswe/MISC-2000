@@ -9,6 +9,7 @@ WAVES    := gtkwave
 
 # ---- Directories -------------------------------------------------------------
 RTL_DIR  := ../rtl/core
+INC_DIR  := ../rtl/include
 SIM_DIR  := .
 VCD_DIR  := ./waves
 
@@ -23,7 +24,7 @@ RED      := \033[0;31m
 RTL_SRCS := $(wildcard $(RTL_DIR)/*.sv)
 
 # ---- Compile/Run Flags -------------------------------------------------------
-IVERILOG_FLAGS := -g2012
+IVERILOG_FLAGS := -g2012 -I$(INC_DIR)
 
 # ---- .PHONY ------------------------------------------------------------------
 .PHONY: all \
@@ -54,7 +55,7 @@ test_alu.vvp: $(RTL_DIR)/alu.sv $(SIM_DIR)/test_alu.sv $(RTL_SRCS)
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_alu.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/alu.sv $(SIM_DIR)/test_alu.sv
 
-test_decoder.vvp: $(RTL_DIR)/decoder.sv $(SIM_DIR)/test_decoder.sv $(RTL_SRCS)
+test_decoder.vvp: $(RTL_DIR)/decoder.sv $(SIM_DIR)/test_decoder.sv $(INC_DIR)/misc_opcodes.svh
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_decoder.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/decoder.sv $(SIM_DIR)/test_decoder.sv
 
@@ -66,15 +67,15 @@ test_getilen.vvp: $(RTL_DIR)/getilen.sv $(SIM_DIR)/test_getilen.sv
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_getilen.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/getilen.sv $(SIM_DIR)/test_getilen.sv
 
-test_ifu.vvp: $(RTL_DIR)/ifu.sv $(SIM_DIR)/test_ifu.sv
+test_ifu.vvp: $(RTL_DIR)/ifu.sv $(SIM_DIR)/test_ifu.sv $(INC_DIR)/misc_opcodes.svh
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_ifu.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/ifu.sv $(SIM_DIR)/test_ifu.sv
 
-test_exception.vvp: $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_exception.sv
+test_exception.vvp: $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_exception.sv $(INC_DIR)/misc_opcodes.svh
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_exception.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/exception.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_exception.sv
 
-test_atomic.vvp: $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
+test_atomic.vvp: $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv $(INC_DIR)/misc_opcodes.svh
 	@echo "$(CYAN)[COMPILE]$(NC) Building test_atomic.vvp ..."
 	$(SIM) $(IVERILOG_FLAGS) -o $@ $(RTL_DIR)/atomic.sv $(RTL_DIR)/csr.sv $(SIM_DIR)/test_atomic.sv
 

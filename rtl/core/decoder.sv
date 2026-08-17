@@ -75,23 +75,8 @@ module misc_decoder (
     localparam logic [10:0] OP_PROG_CTRL_IMM_2  = 11'h696;
     localparam logic [10:0] OP_PROG_CTRL_IMM_3  = 11'h697;
 
-    // Atomic / system-sync opcodes — fall numerically in DATA_XFER range
-    // but are semantically system-level instructions. Routed to CLASS_SYSTEM
-    // with a higher-priority match so downstream logic does not treat them
-    // as plain load/stores. Trade-off: keep existing 4-bit CLASS_* encoding
-    // (no interface change) by reusing CLASS_SYSTEM rather than adding a
-    // dedicated CLASS_ATOMIC; CLASS_SYSTEM already reserved for 0x7C0–0x7CF.
-    // NOTE: OP_LL_D..OP_CAS_DIR / OP_FENCE / OP_GETILEN are intentionally
-    // duplicated across ifu.sv, decoder.sv, atomic.sv, pipeline_ctrl.sv, and
-    // sim testbenches so each module compiles standalone without a shared
-    // `include file. Trade-off: duplication vs. simpler per-module build rules.
-    localparam logic [10:0] OP_LL_D       = 11'h144;
-    localparam logic [10:0] OP_SC_D       = 11'h145;
-    localparam logic [10:0] OP_CAS_IMM    = 11'h146;
-    localparam logic [10:0] OP_CAS_REG    = 11'h147;
-    localparam logic [10:0] OP_CAS_DIR    = 11'h148;
-    localparam logic [10:0] OP_FENCE      = 11'h15E;
-    localparam logic [10:0] OP_GETILEN    = 11'h0FE;
+    // Shared constants (opcodes: atomic, FENCE, GETILEN)
+    `include "misc_opcodes.svh"
 
     // Offset variables (declared outside always_comb to avoid
     // iverilog "constant selects in always_* processes" warning)

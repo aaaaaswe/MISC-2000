@@ -117,16 +117,8 @@ module misc_pipeline_ctrl #(
     logic                    advance_pipe;
     logic [1:0]              next_state;
 
-    // Special opcode constants (atomic + GETILEN)
-    // NOTE: Duplicated from ifu.sv / atomic.sv / getilen.sv — kept in sync
-    // intentionally so pipeline_ctrl compiles standalone without shared includes.
-    localparam logic [10:0] OP_LL_D       = 11'h144;
-    localparam logic [10:0] OP_SC_D       = 11'h145;
-    localparam logic [10:0] OP_CAS_IMM    = 11'h146;
-    localparam logic [10:0] OP_CAS_REG    = 11'h147;
-    localparam logic [10:0] OP_CAS_DIR    = 11'h148;
-    localparam logic [10:0] OP_FENCE      = 11'h15E;
-    localparam logic [10:0] OP_GETILEN    = 11'h0FE;
+    // Shared constants (opcodes: atomic, FENCE, GETILEN)
+    `include "misc_opcodes.svh"
 
     // Instruction decode helpers
     logic [4:0]  decode_rs1_addr;

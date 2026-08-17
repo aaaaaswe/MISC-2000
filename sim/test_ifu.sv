@@ -14,16 +14,8 @@ module tb_ifu;
 
     localparam int MEM_DEPTH = 65536; // 64K 16-bit words
 
-    // Exception cause encodings (mirror IFU internal)
-    localparam logic [1:0] EXC_PAGE_FAULT        = 2'b00;
-    localparam logic [1:0] EXC_ILLEGAL_INSTR     = 2'b01;
-    localparam logic [1:0] EXC_ATOMIC_CROSS_PAGE = 2'b10;
-
-    // Instruction length encodings (mirror IFU internal)
-    localparam logic [2:0] LEN_2B = 3'd0;
-    localparam logic [2:0] LEN_4B = 3'd1;
-    localparam logic [2:0] LEN_6B = 3'd2;
-    localparam logic [2:0] LEN_8B = 3'd3;
+    // Shared constants (exception causes, length encodings, opcodes)
+    `include "misc_opcodes.svh"
 
     // DUT Signals
     logic                     clk;

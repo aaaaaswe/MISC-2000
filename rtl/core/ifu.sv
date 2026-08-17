@@ -42,37 +42,8 @@ module misc_ifu #(
     output logic [ADDR_WIDTH-1:0]   next_pc_o
 );
 
-    // Local parameters
-    // PAGE_SIZE declared as explicit 13-bit unsigned (not int) to match the
-    // 13-bit addition expression used in the atomic cross-page check below
-    // ({instr_start_addr[11:0], 13'd4} > PAGE_SIZE). Avoids mixed signedness
-    // comparison against a signed 32-bit `int` — same numeric value (4096).
-    localparam logic [12:0] PAGE_SIZE = 13'h1000;  // 4 KB page
-
-    // Atomic instruction opcodes (4-byte, must not cross page boundary)
-    // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
-    // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC.
-    // NOTE: These opcode constants are intentionally duplicated across
-    // ifu.sv, decoder.sv, atomic.sv, pipeline_ctrl.sv, and sim testbenches
-    // so each module compiles standalone without a shared `include file.
-    // Trade-off: accept duplication risk vs. simpler per-module build rules
-    // (the sim Makefile builds each RTL file + its testbench with no -I path).
-    localparam logic [10:0] OP_LL_D      = 11'h144;
-    localparam logic [10:0] OP_SC_D      = 11'h145;
-    localparam logic [10:0] OP_CAS_IMM   = 11'h146;
-    localparam logic [10:0] OP_CAS_REG   = 11'h147;
-    localparam logic [10:0] OP_CAS_DIR   = 11'h148;
-
-    // Exception cause encoding
-    localparam logic [1:0] EXC_PAGE_FAULT       = 2'b00;
-    localparam logic [1:0] EXC_ILLEGAL_INSTR    = 2'b01;
-    localparam logic [1:0] EXC_ATOMIC_CROSS_PAGE = 2'b10;
-
-    // Instruction-length encoding (output)
-    localparam logic [2:0] LEN_2B = 3'd0;
-    localparam logic [2:0] LEN_4B = 3'd1;
-    localparam logic [2:0] LEN_6B = 3'd2;
-    localparam logic [2:0] LEN_8B = 3'd3;
+    // Shared constants (opcodes, exception causes, length encodings, PAGE_SIZE)
+    `include "misc_opcodes.svh"
 
     // State machine definition
     typedef enum logic [1:0] {

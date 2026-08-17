@@ -12,20 +12,8 @@ module tb_atomic;
     localparam int ADDR_WIDTH = 64;
     localparam int CLK_PERIOD = 10;   // 10 ns
 
-    // Opcode Constants
-    // Spec: LL.D, SC.D, CAS.D all in 0x144–0x148 (5 opcodes total)
-    // Trade-off: reduce CAS from 5 variants to 3 (IMM/REG/DIR) to fit LL/SC.
-    // NOTE: These opcode constants are intentionally duplicated across
-    // ifu.sv, decoder.sv, atomic.sv, pipeline_ctrl.sv, and sim testbenches
-    // so each module compiles standalone without a shared `include file.
-    // Trade-off: accept duplication risk vs. simpler per-module build rules
-    // (the sim Makefile builds each RTL file + its testbench with no -I path).
-    localparam logic [10:0] OP_LL_D    = 11'h144;
-    localparam logic [10:0] OP_SC_D    = 11'h145;
-    localparam logic [10:0] OP_CAS_IMM = 11'h146;
-    localparam logic [10:0] OP_CAS_REG = 11'h147;
-    localparam logic [10:0] OP_CAS_DIR = 11'h148;
-    localparam logic [10:0] OP_FENCE   = 11'h15E;
+    // Shared constants (opcodes, exception causes, PAGE_SIZE, etc.)
+    `include "misc_opcodes.svh"
 
     // CSR Address Constants
     localparam logic [11:0] CSR_MONITOR_ADDR  = 12'h340;

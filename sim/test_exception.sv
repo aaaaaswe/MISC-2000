@@ -17,9 +17,12 @@ module tb_exception;
     localparam logic [3:0] EXC_CAUSE_LDST_PAGE_FAULT  = 4'hD;
     localparam logic [3:0] EXC_CAUSE_ILLEGAL_INSTR    = 4'h2;
 
+    // Shared constants (IFU exception causes)
+    `include "misc_opcodes.svh"
+
     // IFU / memory exception cause encodings
-    localparam logic [1:0] IFU_CAUSE_PAGE_FAULT    = 2'b00;
-    localparam logic [1:0] IFU_CAUSE_ILLEGAL_INSTR = 2'b01;
+    localparam logic [1:0] IFU_CAUSE_PAGE_FAULT    = EXC_PAGE_FAULT;
+    localparam logic [1:0] IFU_CAUSE_ILLEGAL_INSTR = EXC_ILLEGAL_INSTR;
     localparam logic [1:0] MEM_CAUSE_PAGE_FAULT    = 2'b00;
 
     // CSR addresses

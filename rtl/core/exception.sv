@@ -50,14 +50,17 @@ module misc_exception #(
 );
 
     // Local parameters
+    // Shared constants (IFU exception cause encoding)
+    `include "misc_opcodes.svh"
+
     localparam logic [3:0] EXC_CAUSE_ILLEGAL_INSTR    = 4'h2;
     localparam logic [3:0] EXC_CAUSE_INSTR_PAGE_FAULT  = 4'hC;
     localparam logic [3:0] EXC_CAUSE_LDST_PAGE_FAULT   = 4'hD;
 
-    // IFU exception cause encoding (mirrors ifu.sv localparams EXC_*)
-    localparam logic [1:0] IFU_CAUSE_PAGE_FAULT        = 2'b00;
-    localparam logic [1:0] IFU_CAUSE_ILLEGAL_INSTR     = 2'b01;
-    localparam logic [1:0] IFU_CAUSE_ATOMIC_CROSS_PAGE = 2'b10;
+    // IFU exception cause encoding (from shared include)
+    localparam logic [1:0] IFU_CAUSE_PAGE_FAULT        = EXC_PAGE_FAULT;
+    localparam logic [1:0] IFU_CAUSE_ILLEGAL_INSTR     = EXC_ILLEGAL_INSTR;
+    localparam logic [1:0] IFU_CAUSE_ATOMIC_CROSS_PAGE = EXC_ATOMIC_CROSS_PAGE;
 
     // Memory exception cause encoding (from memory stage)
     localparam logic [1:0] MEM_CAUSE_PAGE_FAULT        = 2'b00;
